@@ -4,6 +4,7 @@ import talib
 import joblib
 import warnings
 import datetime
+import shap
 import numpy as np
 import pandas as pd
 import yfinance as yf
@@ -14,6 +15,7 @@ import matplotlib.gridspec as gridspec
 import seaborn as sns
 import xgboost as xgb
 from xgboost import XGBClassifier
+from IPython.display import display
 from matplotlib.ticker import FuncFormatter
 from sklearn.naive_bayes import GaussianNB
 from sklearn.decomposition import PCA
@@ -320,10 +322,35 @@ def main():
     print("Accuracy: {}".format(metrics.accuracy_score(y_test, y_pred)))
     print(classification_report(y_test, y_pred))
 
+    # Generate predictions against our training and test data
+    pred_train = clf.predict(train_feature_df)
+    proba_train = clf.predict_proba(train_feature_df)
+    pred_test = clf.predict(test_feature_df)
+    proba_test = clf.predict_proba(test_feature_df)
+
+    # Calculate the fpr and tpr for all thresholds of the classification
+    train_fpr, train_tpr, train_threshold = metrics.roc_curve(y_train, proba_train[:,1])
+    test_fpr, test_tpr, test_threshold = metrics.roc_curve(y_test, proba_test[:,1])
+
+    train_roc_auc = metrics.auc(train_fpr, train_tpr)
+    test_roc_auc = metrics.auc(test_fpr, test_tpr)
+
+    # Plot ROC-AUC cureve
+    plt.figure(figsize=(15, 10))
+    plt.title('Receiver Operating Characteristic')
+    plt.plot(train_fpr, train_tpr, 'b', label='Train AUC = %0.2f' % train_roc_auc)
+    plt.plot(test_fpr, test_tpr, 'g', label='Test AUC = %0.2f' % test_roc_auc)
+    plt.legend(loc='lower right')
+    plt.plot([0, 1], [0, 1], 'r--')
+    plt.xlim([0, 1])
+    plt.ylim([0, 1])
+    plt.ylabel('True Positive Rate')
+    plt.xlabel('False Positive Rate')
+    plt.show()
+
     # Feature importance
-    import shap
     explainer = shap.TreeExplainer(clf)
-    shap_values = explainer.shap_values(test_feature_df)
+    shap_values = explainer.shap_values(test_feature_df).round(4)
     shap.summary_plot(shap_values, test_feature_df, plot_type="bar", plot_size=(15, 10))
     shap.summary_plot(shap_values, test_feature_df, plot_size=(15, 10))
 
