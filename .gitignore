@@ -1,2 +1,5 @@
 *.bin
-__pycache__/*
+autotrading/__pycache__/*
+catboost_info/*
+autotrading/api_key_config.py
+data/*
