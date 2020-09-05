@@ -14,13 +14,22 @@ import matplotlib.dates as mdates
 import matplotlib.gridspec as gridspec
 import seaborn as sns
 import xgboost as xgb
+import lightgbm as lgb
 from xgboost import XGBClassifier
-from IPython.display import display
+from tqdm import tqdm
+from scipy.interpolate import interp1d
 from matplotlib.ticker import FuncFormatter
 from sklearn.naive_bayes import GaussianNB
 from sklearn.decomposition import PCA
 from sklearn import metrics
 from sklearn.metrics import classification_report, confusion_matrix
+from sklearn.model_selection import KFold, cross_val_score
+from timeit import default_timer as timer
+from hyperopt import tpe
+from hyperopt import STATUS_OK
+from hyperopt import hp
+from hyperopt import Trials
+from hyperopt import fmin
 warnings.filterwarnings("ignore")
 
 
@@ -49,6 +58,7 @@ def generate_feature(data):
     feature_df["RSI"] = RSI = talib.RSI(close, timeperiod=14)
     feature_df["ULTOSC"] = ULTOSC = talib.ULTOSC(high, low, close, timeperiod1=7, timeperiod2=14, timeperiod3=28)
     feature_df["WILLR"] = WILLR = talib.WILLR(high, low, close, timeperiod=14)
+    feature_df = feature_df.fillna(0.0)
 
     matrix = np.stack((
         ADX, ADXR, APO, AROONOSC, CCI, CMO, DX, MINUS_DI, ROCR100, ROC,
@@ -125,6 +135,246 @@ def triple_barrier(data, ub, lb, max_period, two_class=True):
     return ret
 
 
+def absolute_turning_points(data, plot=True):
+    '''
+    Finds the turning points within an 1D array and returns the indices of the minimum and
+    maximum turning points in two separate lists.
+    '''
+    array = data.Close
+    idx_max, idx_min = [], []
+    if (len(array) < 3):
+        return idx_min, idx_max
+
+    NEUTRAL, RISING, FALLING = range(3)
+    def get_state(a, b):
+        if a < b: return RISING
+        if a > b: return FALLING
+        return NEUTRAL
+
+    ps = get_state(array[0], array[1])
+    begin = 1
+    pbar = tqdm(total=len(array))
+
+    for i in range(2, len(array)):
+        s = get_state(array[i - 1], array[i])
+        if s != NEUTRAL:
+            if ps != NEUTRAL and ps != s:
+                if s == FALLING:
+                    idx_max.append((begin + i - 1) // 2)
+                else:
+                    idx_min.append((begin + i - 1) // 2)
+            begin = i
+            ps = s
+        pbar.update(1)
+    pbar.close()
+
+    if plot:
+        plt.figure(figsize=(20, 10))
+        plt.plot(array, alpha=0.7)
+        plt.scatter(array.index[idx_min], array.iloc[idx_min], marker="^", label="buy", color="green")
+        plt.scatter(array.index[idx_max], array.iloc[idx_max], marker="v", label="sell", color="red")
+        plt.title("Absolute Turning Points")
+        plt.legend()
+        plt.grid()
+        plt.show()
+
+    return idx_min, idx_max
+
+
+def relative_turning_points(data, step_size=10, interpolation_kind='cubic', plot=True):
+    '''
+    Reference from https://www.quantopian.com/posts/quick-and-dirty-way-to-find-tops-and-bottoms-of-time-series
+    Returns Tops and Bottoms of the inputed price series as a tuple
+    '''
+    array = data.Close
+    # Get smoothed curve
+    x = np.arange(0,len(array),step_size)
+    f = interp1d(x, array.values[::step_size], bounds_error=False, kind=interpolation_kind)
+
+    # Use forward finite difference method to calculate first derivative
+    x = np.arange(0,len(array))
+    y = f(x)
+    dy = [0.0]*len(x)
+    for i in range(len(x)-1):
+        dy[i] = (y[i+1]-y[i])/(x[i+1]-x[i])
+    dy[-1] = (y[-1]-y[-2])/(x[-1]-x[-2])
+
+    # Quick and dirty way to get bottoms and tops without calculating 2nd derivative
+    bottoms = []
+    tops = []
+    prev = dy[0]
+    pbar = tqdm(total=len(array))
+
+    for i in range(1, len(x)):
+        if prev < 0 and dy[i] > 0: bottoms.append(i)
+        elif prev > 0 and dy[i] < 0: tops.append(i)
+        prev = dy[i]
+        pbar.update(1)
+    pbar.close()
+
+    if plot:
+        plt.figure(figsize=(20, 10))
+        plt.plot(array, alpha=0.7)
+        plt.scatter(array.index[bottoms], array.iloc[bottoms], marker="^", label="buy", color="green")
+        plt.scatter(array.index[tops], array.iloc[tops], marker="v", label="sell", color="red")
+        plt.title("Relative Turning Points (step size: {})".format(step_size))
+        plt.legend()
+        plt.grid()
+        plt.show()
+
+    return bottoms, tops
+
+
+def fixed_time_horizon(data, threshold, look_forward=1, standardized=False, window=None):
+    """
+    Reference from https://mlfinlab.readthedocs.io/en/latest/labeling/labeling_fixed_time_horizon.html
+    Fixed-Time Horizon Labelling Method
+    Originally described in the book Advances in Financial Machine Learning, Chapter 3.2, p.43-44.
+    Returns 1 if return at h-th bar after t_0 is greater than the threshold, -1 if less, and 0 if in between.
+
+    Args:
+        data (:obj: pd.DataFrame):
+            Close prices over fixed horizons (usually time bars, but can be any format as long as
+            index is timestamps) for a stock ticker.
+        threshold (:obj: float or pd.Series):
+            When the abs(change) is larger than the threshold, it is labelled as 1 or -1.
+            If change is smaller, it's labelled as 0. Can be dynamic if threshold is pd.Series. If threshold is
+            a series, threshold.index must match close.index. If threshold is negative, then the directionality
+            of the labels will be reversed.
+        look_forward (:obj: int):
+            Number of ticks to look forward when calculating future return rate. (1 by default)
+            If n is the numerical value of look_forward, the last n observations will return a label of NaN
+            due to lack of data to calculate the forward return in those cases.
+        standardized (:obj: bool):
+            Whether returns are scaled by mean and standard deviation.
+        window (:obj: int):
+            If standardized is True, the rolling window period for calculating the mean and standard
+            deviation of returns.
+
+    Returns:
+        :obj: np.array
+            -1, 0, or 1 denoting whether return for each tick is under/between/greater than the threshold.
+            The final look_forward number of observations will be labeled np.nan.
+    """
+    # Calculate forward price with
+    close = data.Close
+    forward_return = close.pct_change(periods=look_forward).shift(-look_forward)
+
+    # Warning if look_forward is greater than the length of the series,
+    if look_forward >= len(forward_return):
+        warnings.warn('look_forward period is greater than the length of the Series. All labels will be NaN.',
+                      UserWarning)
+
+    # Adjust by mean and stdev, if desired. Assert that window must exist if standardization is on. Warning if window is
+    # too large.
+    if standardized:
+        assert isinstance(window, int), "when standardized is True, window must be int"
+        if window >= len(forward_return):
+            warnings.warn('window is greater than the length of the Series. All labels will be NaN.', UserWarning)
+        mean = forward_return.rolling(window=window).mean()
+        stdev = forward_return.rolling(window=window).std()
+        forward_return -= mean
+        forward_return /= stdev
+
+    # Conditions for 1, 0, -1
+    conditions = [forward_return > threshold, (forward_return <= threshold) & (forward_return >= -threshold),
+                  forward_return < -threshold]
+    choices = [1, np.nan, -1]
+    labels = np.select(conditions, choices, default=np.nan)
+    return labels
+
+
+def generate_label(
+    data, method, ub=1.07, lb=0.97, max_period=20, two_class=True, step_size=10,
+    prediction_delay=5, threshold=.04, look_forward=1, standardized=False, window=5):
+    """
+    Generate labels for supervised machine learning.
+
+    Args:
+        data (:obj: pd.DataFrame):
+            Get data from yahoo finance API with columns: `Open`, `High`, `Low`, `Close`, and (optional) `Volume`.
+            If any columns are missing, set them to what you have available,
+            e.g. df['Open'] = df['High'] = df['Low'] = df['Close']
+        method (:obj: str):
+            "TBM": Triple Barrier Method
+            "ATP": Absolute Turning Point Method
+            "RTP": Relative Turning Point Method
+            "PDM": Prediction Delay Method
+            "FTH": Fixed-Time Horizon Method
+        ub (:obj: float, 'optional', defaults to 1.07):
+            Parameter for "TBM" method.
+            Upper bound means profit-taking.
+        lb (:obj: float, 'optional', defaults to 0.97):
+            Parameter for "TBM" method.
+            Lower bound means loss-stop.
+        max_period (:obj: int, 'optional', defaults to 20):
+            Parameter for "TBM" method.
+            Max time to hold the position.
+        two_class (:obj: bool, 'optional', defaults to true):
+            Parameter for "TBM" method.
+            Whether or not the binary signal has been generated.
+        step_size: (:obj: bool, 'optional', defaults to true):
+            Parameter for "RTP" method.
+            Window size for RTP method.
+        prediction_delay: (:obj: int, 'optional', defaults to 5):
+            Parameter for "PDM" method.
+            If 'prediction_delay' days after the stock price goes up, then assign the label 1.
+            If 'prediction_delay' days after the stock price goes down, then assign the label 0.
+        threshold (:obj: float or pd.Series):
+            Parameter for "FTH" method.
+            When the abs(change) is larger than the threshold, it is labelled as 1 or -1.
+            If change is smaller, it's labelled as 0. Can be dynamic if threshold is pd.Series. If threshold is
+            a series, threshold.index must match close.index. If threshold is negative, then the directionality
+            of the labels will be reversed.
+        look_forward (:obj: int):
+            Parameter for "FTH" method.
+            Number of ticks to look forward when calculating future return rate. (1 by default)
+            If n is the numerical value of look_forward, the last n observations will return a label of NaN
+            due to lack of data to calculate the forward return in those cases.
+        standardized (:obj: bool):
+            Parameter for "FTH" method.
+            Whether returns are scaled by mean and standard deviation.
+        window (:obj: int):
+            Parameter for "FTH" method.
+            If standardized is True, the rolling window period for calculating the mean and standard
+            deviation of returns.
+
+    Returns:
+        :obj: pd.Series
+            Signal series contains 0 or 1.
+    """
+    convert = lambda x: 1.0 if x == 1.0 else 0.0
+    if method == "TBM":
+        signal = triple_barrier(data, ub=ub, lb=lb, max_period=max_period, two_class=two_class).binary_signal
+        return signal
+    elif method == "ATP":
+        idx_min, idx_max = absolute_turning_points(data, plot=False)
+        signal = pd.Series(np.nan, data.index)
+        signal.iloc[idx_max] = -1.0
+        signal.iloc[idx_min] = 1.0
+        signal = signal.fillna(method="ffill").fillna(1.0)
+        signal = signal.map(convert)
+        return signal
+    elif method == "RTP":
+        idx_min, idx_max = relative_turning_points(data, step_size=step_size, interpolation_kind='cubic', plot=False)
+        signal = pd.Series(np.nan, data.index)
+        signal.iloc[idx_max] = -1.0
+        signal.iloc[idx_min] = 1.0
+        signal = signal.fillna(method="ffill").fillna(1.0)
+        signal = signal.map(convert)
+        return signal
+    elif method == "PDM":
+        data['trend'] = np.where(data.Close.shift(-prediction_delay) > data.Close, 1.0, 0.0)
+        data = data.ffill()
+        signal = data.trend
+        return signal
+    elif method == "FTH":
+        signal = fixed_time_horizon(data, threshold=threshold, look_forward=look_forward, standardized=standardized, window=window)
+        signal = pd.Series(signal).fillna(method="ffill").fillna(1.0)
+        signal = signal.map(convert)
+        return signal
+
+
 def ml_backtest(data, prediction, cash=1000.0, fee=0.002, plot=True, stats=True):
     """
     Reference from https://gist.github.com/StockBoyzZ/396d48be23fd479a5ca62362b1bc8dc7#file-strategy_test-py
@@ -181,6 +431,25 @@ def ml_backtest(data, prediction, cash=1000.0, fee=0.002, plot=True, stats=True)
     data['strategy_equity'] = (data.strategy_return + 1).cumprod() * cash
     data['strategy_net_equity'] = (data.strategy_net_return + 1).cumprod() * cash
 
+    def simple_drawdown(return_series: pd.Series, cash=1000):
+        """
+        Args:
+            return_series (:obj: pd.DataFrame):
+
+        Returns:
+            wealth (:obj: pd.DataFrame)
+            peaks (:obj: pd.DataFrame)
+            drawdown (:obj: pd.DataFrame)
+        """
+        wealth_index = cash*(return_series+1).cumprod()
+        previous_peak = wealth_index.cummax()
+        drawdowns = (wealth_index-previous_peak)/previous_peak
+        return pd.DataFrame({
+            "wealth": wealth_index,
+            "peaks": previous_peak,
+            "drawdown": drawdowns
+        })
+
     def _compute_drawdown_duration_peaks(dd: pd.Series):
         iloc = np.unique(np.r_[(dd == 0).values.nonzero()[0], len(dd) - 1])
         iloc = pd.Series(iloc, index=dd.index[iloc])
@@ -215,23 +484,24 @@ def ml_backtest(data, prediction, cash=1000.0, fee=0.002, plot=True, stats=True)
         s.loc['Return [%]'] = (data.strategy_equity[-1] - data.strategy_equity[0]) / data.strategy_equity[0] * 100
         s.loc['Net Return [%]'] = (data.strategy_net_equity[-1] - data.strategy_net_equity[0]) / data.strategy_net_equity[0] * 100
         s.loc['Buy & Hold Return [%]'] = (data.buy_and_hold_equity[-1] - data.buy_and_hold_equity[0]) / data.buy_and_hold_equity[0] * 100
-        s.loc['Mean Return / Day'] = mean_return = np.mean(trade_return)
-        s.loc['Mean Net Return / Day'] = mean_net_return = np.mean(net_trade_return)
+        s.loc['Mean Return Per Day'] = return_per_day = (trade_return+1).prod()**(1/data.shape[0]) - 1
+        s.loc['Mean Net Return Per Day'] = net_return_per_day = (data.strategy_net_return+1).prod()**(1/data.shape[0]) - 1
+        s.loc['Annualized Return [%]'] = annualized_return = ((net_return_per_day+1)**252 - 1) * 100
+        s.loc['Annualized Volatility'] = annualized_volatility = net_trade_return.std()*np.sqrt(252)
         s.loc['# Trades'] = trade_count = len(sell_dates)
-        s.loc['# Trades / Year'] = trade_count_per_year = trade_count / (len(data)/252)
+        s.loc['# Trades Per Year'] = trade_count_per_year = trade_count / (len(data)/252)
         s.loc['Win Rate [%]'] = win_rate = (net_trade_return > 0).sum() / trade_count * 100
         s.loc['Best Trade [%]'] = data.strategy_net_return.max() * 100
         s.loc['Worst Trade [%]'] = data.strategy_net_return.min() * 100
         dd = 1 - data.strategy_net_return / np.maximum.accumulate(data.strategy_net_return)
         dd_dur, dd_peaks = _compute_drawdown_duration_peaks(pd.Series(dd, index=data.index))
+        s.loc['Max. Drawdown Date'] = simple_drawdown(data.strategy_net_return)["drawdown"].idxmin()
         s.loc['Max. Drawdown [%]'] = max_dd = -np.nan_to_num(dd.max()) * 100
         s.loc['Avg. Drawdown [%]'] = -dd_peaks.mean() * 100
         s.loc['Max. Drawdown Duration'] = _round_timedelta(dd_dur.max())
         s.loc['Avg. Drawdown Duration'] = _round_timedelta(dd_dur.mean())
-        strategy_ear = (data.strategy_net_return + 1).cumprod()[-1] ** (252/len(data)) - 1
-        strategy_std = data.strategy_net_return.std() * (252 ** 0.5)
-        s.loc['Sharpe Ratio'] = (strategy_ear - 0.01) / strategy_std
-        s.loc['Calmar Ratio'] = strategy_ear / ((-max_dd / 100) or np.nan)
+        s.loc['Annualized Sharpe Ratio'] = (annualized_return - 0.01) / annualized_volatility
+        s.loc['Calmar Ratio'] = annualized_return / ((-max_dd / 100) or np.nan)
         print(s)
 
     def plot_drawdown_underwater(returns, ax=None, **kwargs):
@@ -278,23 +548,24 @@ def ml_backtest(data, prediction, cash=1000.0, fee=0.002, plot=True, stats=True)
                     mdates.datestr2num(data.index[i].strftime('%Y-%m-%d')) + 0.5,
                     facecolor='lightcoral', edgecolor='none', alpha=0.5
                     )
-        ax1.title.set_text("Close Price")
+        ax1.set_title("Close Price")
         ax1.legend()
         ax1.grid()
         ax2 = fig.add_subplot(spec[2:4])
         ax2.plot(data.buy_and_hold_equity, label="Buy & Hold")
         ax2.plot(data.strategy_equity, label="ML Strategy")
         ax2.plot(data.strategy_net_equity, label="ML Strategy with Fee")
-        ax2.title.set_text("Equity")
+        ax2.set_title("Equity")
         ax2.legend()
         ax2.grid()
         ax3 = fig.add_subplot(spec[4:6])
         ax3 = plot_drawdown_underwater(data.strategy_net_return, ax=ax3)
-        ax3.title.set_text("Time Under Water")
+        ax3.set_title("Time Under Water")
+        ax3.set_xticklabels(data.index.to_period('M').tolist(), rotation=0)
         ax3.grid()
         ax4 = fig.add_subplot(spec[6])
         ax4.plot(data.binary_signal, color='orange')
-        ax4.title.set_text("Prediction")
+        ax4.set_title("Prediction")
         ax4.grid()
         plt.tight_layout()
         plt.show()
@@ -302,57 +573,59 @@ def ml_backtest(data, prediction, cash=1000.0, fee=0.002, plot=True, stats=True)
 
 def main():
     # Get data and split into train dataset and test dataset
-    data = yf.download("SPY")
+    data = yf.download("AAPL")
     dtrain = data.loc[:"2017-01-01"]
     dtest = data.loc["2017-01-01":]
-    train_feature_df, X_train = generate_feature(dtrain)
-    y_train = triple_barrier(dtrain, ub=1.07, lb=0.97, max_period=20, two_class=True).binary_signal
-    test_feature_df, X_test = generate_feature(dtest)
-    y_test = triple_barrier(dtest, ub=1.07, lb=0.97, max_period=20, two_class=True).binary_signal
+    X_train_df, X_train = generate_feature(dtrain)
+    X_test_df, X_test = generate_feature(dtest)
 
-    # Modelling
-    clf = XGBClassifier(learning_rate=0.01, n_estimators=400, random_state=1016)
-    # xgb_param = clf.get_xgb_params()
-    # cv_result = xgb.cv(
-    #     xgb_param, xgb.DMatrix(X_train, label=y_train), num_boost_round=5000, nfold=15, metrics=['auc'],
-    #     early_stopping_rounds=50, stratified=True, seed=1016)
-    # clf.set_params(n_estimators=cv_result.shape[0])
-    clf.fit(train_feature_df, y_train, eval_metric='auc')
-    y_pred = clf.predict(test_feature_df)
-    print("Accuracy: {}".format(metrics.accuracy_score(y_test, y_pred)))
+    ## Generate label
+    # "TBM": Triple Barrier Method
+    # "ATP": Absolute Turning Point Method
+    # "RTP": Relative Turning Point Method
+    # "PDM": Prediction Delay Method
+    # "FTH": Fixed-Time Horizon Method
+    LEBELLING_METHOD = "FTH"
+    y_train = generate_label(dtrain, method=LEBELLING_METHOD)
+    y_test = generate_label(dtest, method=LEBELLING_METHOD)
+
+    # # Modelling
+    # clf = XGBClassifier(learning_rate=0.01, n_estimators=400, random_state=1016)
+    # # xgb_param = clf.get_xgb_params()
+    # # cv_result = xgb.cv(
+    # #     xgb_param, xgb.DMatrix(X_train, label=y_train), num_boost_round=5000, nfold=15, metrics=['auc'],
+    # #     early_stopping_rounds=50, stratified=True, seed=1016)
+    # # clf.set_params(n_estimators=cv_result.shape[0])
+    # clf.fit(X_train, y_train, eval_metric='auc')
+    # y_pred = clf.predict(X_test)
+    # print("Accuracy: {}".format(metrics.accuracy_score(y_test, y_pred)))
+    # print(classification_report(y_test, y_pred))
+
+    # Hyper Opt
+    kf = KFold(n_splits=10, random_state=1016)
+    def gb_mse_cv(params, random_state=1016, cv=kf, X=X_train, y=y_train):
+        params = {
+            'n_estimators': int(params['n_estimators']),
+            'max_depth': int(params['max_depth']),
+            'learning_rate': params['learning_rate']}
+        model = lgb.LGBMClassifier(random_state=random_state, num_leaves=4, **params)
+        score = -cross_val_score(model, X, y, cv=cv, scoring="roc_auc", n_jobs=-1).mean()
+        return score
+
+    space = {
+        'n_estimators': hp.quniform('n_estimators', 100, 2000, 1),
+        'max_depth' : hp.quniform('max_depth', 4, 20, 1),
+        'learning_rate': hp.loguniform('learning_rate', -5, 0)}
+    trials = Trials()
+    best = fmin(
+        fn=gb_mse_cv, space=space, algo=tpe.suggest,
+        max_evals=10, trials=trials, rstate=np.random.RandomState(1016))
+    clf = lgb.LGBMClassifier(
+        random_state=1016, n_estimators=int(best['n_estimators']),
+        max_depth=int(best['max_depth']),learning_rate=best['learning_rate'])
+    clf.fit(X_train, y_train)
+    y_pred = clf.predict(X_test)
     print(classification_report(y_test, y_pred))
-
-    # Generate predictions against our training and test data
-    pred_train = clf.predict(train_feature_df)
-    proba_train = clf.predict_proba(train_feature_df)
-    pred_test = clf.predict(test_feature_df)
-    proba_test = clf.predict_proba(test_feature_df)
-
-    # Calculate the fpr and tpr for all thresholds of the classification
-    train_fpr, train_tpr, train_threshold = metrics.roc_curve(y_train, proba_train[:,1])
-    test_fpr, test_tpr, test_threshold = metrics.roc_curve(y_test, proba_test[:,1])
-
-    train_roc_auc = metrics.auc(train_fpr, train_tpr)
-    test_roc_auc = metrics.auc(test_fpr, test_tpr)
-
-    # Plot ROC-AUC cureve
-    plt.figure(figsize=(15, 10))
-    plt.title('Receiver Operating Characteristic')
-    plt.plot(train_fpr, train_tpr, 'b', label='Train AUC = %0.2f' % train_roc_auc)
-    plt.plot(test_fpr, test_tpr, 'g', label='Test AUC = %0.2f' % test_roc_auc)
-    plt.legend(loc='lower right')
-    plt.plot([0, 1], [0, 1], 'r--')
-    plt.xlim([0, 1])
-    plt.ylim([0, 1])
-    plt.ylabel('True Positive Rate')
-    plt.xlabel('False Positive Rate')
-    plt.show()
-
-    # Feature importance
-    explainer = shap.TreeExplainer(clf)
-    shap_values = explainer.shap_values(test_feature_df).round(4)
-    shap.summary_plot(shap_values, test_feature_df, plot_type="bar", plot_size=(15, 10))
-    shap.summary_plot(shap_values, test_feature_df, plot_size=(15, 10))
 
     # Backtest for machine learning
     ml_backtest(dtest, y_pred)
@@ -363,11 +636,11 @@ def main():
         pass
     else:
         os.mkdir(folder_path)
-    file_name = "./checkpoints/GaussianNB_{}.bin".format(datetime.datetime.today().date())
+    file_name = "./checkpoints/ML_{}.bin".format(datetime.datetime.today().date())
     joblib.dump(clf, file_name)
 
     # Get trained model
-    file_name = "./checkpoints/GaussianNB_{}.bin".format(datetime.datetime.today().date())
+    file_name = "./checkpoints/ML_{}.bin".format(datetime.datetime.today().date())
     clf = joblib.load(file_name)
     print("Successful!")
 
