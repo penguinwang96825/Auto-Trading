@@ -3,6 +3,11 @@ import numpy as np
 from scipy.stats import jarque_bera
 
 
+def semi_deviation(r):
+    is_negative = r < 0
+    return r[is_negative].std(ddof=0)
+
+
 def skewness(r):
     """
     Alternative to scipy.stats.skew()
