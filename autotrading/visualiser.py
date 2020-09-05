@@ -105,6 +105,42 @@ def run_models_exps(X_train, y_train, X_test, y_test, print_result=False, plot=T
     return model_metrics_df, time_metrics_df
 
 
+def plot_aucroc_curve(X_train, y_train, X_test, y_test, clf):
+    # Generate predictions against our training and test data
+    pred_train = clf.predict(X_train)
+    proba_train = clf.predict_proba(X_train)
+    pred_test = clf.predict(X_test)
+    proba_test = clf.predict_proba(X_test)
+
+    # Calculate the fpr and tpr for all thresholds of the classification
+    train_fpr, train_tpr, train_threshold = metrics.roc_curve(y_train, proba_train[:,1])
+    test_fpr, test_tpr, test_threshold = metrics.roc_curve(y_test, proba_test[:,1])
+
+    train_roc_auc = metrics.auc(train_fpr, train_tpr)
+    test_roc_auc = metrics.auc(test_fpr, test_tpr)
+
+    # Plot ROC-AUC curve
+    plt.figure(figsize=(15, 10))
+    plt.title('Receiver Operating Characteristic')
+    plt.plot(train_fpr, train_tpr, 'b', label='Train AUC = %0.2f' % train_roc_auc)
+    plt.plot(test_fpr, test_tpr, 'g', label='Test AUC = %0.2f' % test_roc_auc)
+    plt.legend(loc='lower right')
+    plt.plot([0, 1], [0, 1], 'r--')
+    plt.xlim([0, 1])
+    plt.ylim([0, 1])
+    plt.ylabel('True Positive Rate')
+    plt.xlabel('False Positive Rate')
+    plt.show()
+
+
+def plot_shap(X_test, clf):
+    # Feature importance
+    explainer = shap.TreeExplainer(clf)
+    shap_values = explainer.shap_values(X_test)
+    shap.summary_plot(shap_values, X_test, plot_type="bar", plot_size=(15, 10))
+    shap.summary_plot(shap_values, X_test, plot_size=(15, 10))
+
+
 def main():
     # Read data from yahoo finance API
     data = yf.download("SPY")
