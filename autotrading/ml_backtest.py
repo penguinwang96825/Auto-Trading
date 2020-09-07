@@ -6,6 +6,7 @@ import warnings
 import datetime
 import shap
 import plotly
+import risk_kit
 import classifier
 import visualiser
 import numpy as np
@@ -462,9 +463,13 @@ class MLBacktest:
         elif self.strategy == "GBC":
             clf, y_pred = classifier.gbc_opt(X_train, y_train, X_test, y_test)
 
+        # Convert prediction to buy/sell signal
         data["binary_signal"] = y_pred
         data["binary_signal"] = data["binary_signal"].apply(lambda x: 1.0 if x == 1.0 else 0.0)
+        # Shift prediction one day to simulate real life trading scenario
         data['status'] = data.binary_signal.shift(1).fillna(0)
+        # When status moves from 1 to 0, buy position at "Open" price
+        # When status moves from 0 to 1, sell position at "Open" price
         data['buy_price'] = data.Open[np.where((data.status == 1.0) & (data.status.shift(1) == 0.0))[0]]
         data['sell_price'] = data.Open[np.where((data.status == 0.0) & (data.status.shift(1) == 1.0))[0]]
         data = data.fillna(0.0)
@@ -472,46 +477,32 @@ class MLBacktest:
         # Calculate trade return and net trade return
         buy_cost = np.array(data.buy_price[data.buy_price != 0])
         sell_price = np.array(data.sell_price[data.sell_price != 0])
+        # Ignore the last buy, cause it is not a complete trade.
         if len(buy_cost) > len(sell_price) :
             buy_cost = buy_cost[:-1]
+        # Trade return array
         trade_return = sell_price / buy_cost - 1
+        # Net trade return array
         net_trade_return = trade_return - fee
 
         # Put trade return and net trade return into dataframe
         data["trade_return"] = 0.0
         data["net_trade_return"] = 0.0
+        # Get sell dates index. Once selling the position, returns will be calculated.
         sell_dates = data.sell_price[data.sell_price != 0].index
         data.loc[sell_dates, "trade_return"] = trade_return
         data.loc[sell_dates, "net_trade_return"] = net_trade_return
 
-        # Plot performance for every strategies
+        # Calculate performance for every strategies
         data["open_daily_return"] = data.Open / data.Open.shift(1) - 1
         data["strategy_return"] = data.status.shift(1) * data.open_daily_return
         data["strategy_net_return"] = data.strategy_return
         data.loc[sell_dates, "strategy_net_return"] = data.loc[sell_dates, "strategy_net_return"] - fee
         data = data.fillna(0.0)
+        # Calculate equity for buy&hold and startegy returns
         data['buy_and_hold_equity'] = (data.open_daily_return + 1).cumprod() * cash
         data['strategy_equity'] = (data.strategy_return + 1).cumprod() * cash
         data['strategy_net_equity'] = (data.strategy_net_return + 1).cumprod() * cash
-
-        def simple_drawdown(return_series: pd.Series, cash=1000):
-            """
-            Args:
-                return_series (:obj: pd.DataFrame):
-
-            Returns:
-                wealth (:obj: pd.DataFrame)
-                peaks (:obj: pd.DataFrame)
-                drawdown (:obj: pd.DataFrame)
-            """
-            wealth_index = cash*(return_series+1).cumprod()
-            previous_peak = wealth_index.cummax()
-            drawdowns = (wealth_index-previous_peak)/previous_peak
-            return pd.DataFrame({
-                "wealth": wealth_index,
-                "peaks": previous_peak,
-                "drawdown": drawdowns
-            })
 
         def _compute_drawdown_duration_peaks(dd: pd.Series):
             iloc = np.unique(np.r_[(dd == 0).values.nonzero()[0], len(dd) - 1])
@@ -544,21 +535,20 @@ class MLBacktest:
             s.loc['Duration'] = s.End - s.Start
             s.loc['Equity Final [$]'] = data.strategy_net_equity[-1]
             s.loc['Equity Peak [$]'] = data.strategy_net_equity.max()
-            s.loc['Return [%]'] = (data.strategy_equity[-1] - data.strategy_equity[0]) / data.strategy_equity[0] * 100
             s.loc['Net Return [%]'] = (data.strategy_net_equity[-1] - data.strategy_net_equity[0]) / data.strategy_net_equity[0] * 100
             s.loc['Buy & Hold Return [%]'] = (data.buy_and_hold_equity[-1] - data.buy_and_hold_equity[0]) / data.buy_and_hold_equity[0] * 100
-            s.loc['Mean Return Per Day'] = return_per_day = (trade_return+1).prod()**(1/data.shape[0]) - 1
-            s.loc['Mean Net Return Per Day'] = net_return_per_day = (data.strategy_net_return+1).prod()**(1/data.shape[0]) - 1
-            s.loc['Annualized Return [%]'] = annualized_return = ((net_return_per_day+1)**252 - 1) * 100
-            s.loc['Annualized Volatility'] = annualized_volatility = net_trade_return.std()*np.sqrt(252)
+            # s.loc['Mean Return Per Day'] = return_per_day = (trade_return+1).prod()**(1/data.shape[0]) - 1
+            # s.loc['Mean Net Return Per Day'] = net_return_per_day = (data.strategy_net_return+1).prod()**(1/data.shape[0]) - 1
+            s.loc['Annualized Return [%]'] = annualized_return = risk_kit.annualise_rets(data.strategy_net_return, 252)
+            s.loc['Annualized Volatility'] = annualized_volatility = risk_kit.annualise_vol(data.strategy_net_return, 252)
             s.loc['# Trades'] = trade_count = len(sell_dates)
-            s.loc['# Trades Per Year'] = trade_count_per_year = trade_count / (len(data)/252)
+            s.loc['# Trades Per Year'] = trade_count_per_year = trade_count / (data.shape[0]/252)
             s.loc['Win Rate [%]'] = win_rate = (net_trade_return > 0).sum() / trade_count * 100
             s.loc['Best Trade [%]'] = data.strategy_net_return.max() * 100
             s.loc['Worst Trade [%]'] = data.strategy_net_return.min() * 100
             dd = 1 - data.strategy_net_return / np.maximum.accumulate(data.strategy_net_return)
             dd_dur, dd_peaks = _compute_drawdown_duration_peaks(pd.Series(dd, index=data.index))
-            s.loc['Max. Drawdown Date'] = simple_drawdown(data.strategy_net_return)["drawdown"].idxmin()
+            s.loc['Max. Drawdown Date'] = risk_kit.drawdown(data.strategy_net_return)["drawdown"].idxmin()
             s.loc['Max. Drawdown [%]'] = max_dd = -np.nan_to_num(dd.max()) * 100
             s.loc['Avg. Drawdown [%]'] = -dd_peaks.mean() * 100
             s.loc['Max. Drawdown Duration'] = _round_timedelta(dd_dur.max())
@@ -635,6 +625,8 @@ class MLBacktest:
             plt.tight_layout()
             plt.show()
 
+        return data, s
+
 
 def main():
     global Config
@@ -643,11 +635,9 @@ def main():
 
     # Backtest for machine learning
     bt = MLBacktest(data=data, strategy=Config.STRATEGY, cash=Config.CASH, fee=Config.FEE)
-    bt.run()
-
-    # Get trained model
-    file_name = "./checkpoints/ML_{}.bin".format(datetime.datetime.today().date())
-    clf = joblib.load(file_name)
+    data, stats = bt.run()
+    print(data)
+    data.to_csv("./results/backtest.csv")
 
 
 if __name__ == "__main__":
