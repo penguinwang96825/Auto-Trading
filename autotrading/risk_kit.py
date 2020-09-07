@@ -99,20 +99,6 @@ def is_normal(r, level=0.01):
     return p_value > level
 
 
-<<<<<<< HEAD
-def annualise_vol(r, periods_per_year):
-    return r.std()*(periods_per_year**.05)
-
-
-def annualise_rets(r, periods_per_year):
-    compound_growth = (1+r).prod()
-    n_periods = r.shape[0]
-    return compound_growth**(periods_per_year/n_periods)-1
-
-
-def sharpe_ratio(r, risk_free_rate, periods_per_year):
-    rf_per_period = (1+risk_free_rate)**(1/periods_per_year)-1
-=======
 def annualise_rets(r, periods_per_year):
     compounded_growth = (1+r).prod()
     n_periods = r.shape[0]
@@ -126,15 +112,12 @@ def annualise_vol(r, periods_per_year):
 def sharpe_ratio(r, risk_free_rate, periods_per_year):
     # Convert annual risk free rate to per period
     rf_per_period = (1+risk_free_rate)*(1/periods_per_year)-1
->>>>>>> 334b0aa80a1a6454ef4f074b8a7d7f9b14d5ff5f
     excess_ret = r - rf_per_period
     ann_ex_ret = annualise_rets(excess_ret, periods_per_year)
     ann_vol = annualise_vol(r, periods_per_year)
     return ann_ex_ret/ann_vol
 
 
-<<<<<<< HEAD
-=======
 def drawdown(return_series: pd.Series, cash=1000):
     """
     Args:
@@ -155,7 +138,6 @@ def drawdown(return_series: pd.Series, cash=1000):
     })
 
 
->>>>>>> 334b0aa80a1a6454ef4f074b8a7d7f9b14d5ff5f
 def main():
     r = np.random.normal(0, 0.1, size=(10000, 1))
     print(is_normal(r))
