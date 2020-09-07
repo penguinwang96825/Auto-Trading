@@ -72,7 +72,7 @@ def skewness(r):
     return exp/sigma_r**3
 
 
-def kurtosis():
+def kurtosis(r):
     """
     Alternative to scipy.stats.kurtosis()
 
@@ -97,6 +97,45 @@ def is_normal(r, level=0.01):
     """
     statistic, p_value = jarque_bera(r)
     return p_value > level
+
+
+def annualise_rets(r, periods_per_year):
+    compounded_growth = (1+r).prod()
+    n_periods = r.shape[0]
+    return compounded_growth**(periods_per_year/n_periods)-1
+
+
+def annualise_vol(r, periods_per_year):
+    return r.std()*(periods_per_year**0.5)
+
+
+def sharpe_ratio(r, risk_free_rate, periods_per_year):
+    # Convert annual risk free rate to per period
+    rf_per_period = (1+risk_free_rate)*(1/periods_per_year)-1
+    excess_ret = r - rf_per_period
+    ann_ex_ret = annualise_rets(excess_ret, periods_per_year)
+    ann_vol = annualise_vol(r, periods_per_year)
+    return ann_ex_ret/ann_vol
+
+
+def drawdown(return_series: pd.Series, cash=1000):
+    """
+    Args:
+        return_series (:obj: pd.DataFrame):
+
+    Returns:
+        wealth (:obj: pd.DataFrame)
+        peaks (:obj: pd.DataFrame)
+        drawdown (:obj: pd.DataFrame)
+    """
+    wealth_index = cash*(return_series+1).cumprod()
+    previous_peak = wealth_index.cummax()
+    drawdowns = (wealth_index-previous_peak)/previous_peak
+    return pd.DataFrame({
+        "wealth": wealth_index,
+        "peaks": previous_peak,
+        "drawdown": drawdowns
+    })
 
 
 def main():
