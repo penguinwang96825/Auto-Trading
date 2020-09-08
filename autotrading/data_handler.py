@@ -3,11 +3,23 @@ import json
 import sqlite3
 import joblib
 import requests
+import glob
+import datetime
+import warnings
 import pandas as pd
+import numpy as np
 import yfinance as yf
+import matplotlib.pyplot as plt
+import seaborn as sns
+from tqdm import tqdm
+from collections import deque
+from dateutil.relativedelta import relativedelta
 from api_key_config import API_Config
 from sqlalchemy import create_engine
+from transformers import pipeline
+from textblob import TextBlob
 global API_Config
+warnings.filterwarnings("ignore")
 
 
 def progressbar(iter, prefix="", size=100, file=sys.stdout):
@@ -81,8 +93,21 @@ def read_stock_table_from_db(table):
 def read_forex_table_from_db(table):
     """
     Read forex table from database using sqlalchemy.
+    "EURUSD", "USDJPY", "GBPUSD", "USDCHF"
     """
     database_path = 'sqlite:///data/data.db'
+    engine = create_engine(database_path, echo=False)
+    data = pd.read_sql_table(table, database_path)
+    engine.dispose()
+    data.set_index(keys="Date", drop=True, inplace=True)
+    return data
+
+
+def read_twitter_table_from_db(table="tweets"):
+    """
+    Read tweets table from database.
+    """
+    database_path = 'sqlite:///data/twitter.db'
     engine = create_engine(database_path, echo=False)
     data = pd.read_sql_table(table, database_path)
     engine.dispose()
@@ -122,9 +147,81 @@ def create_currency_pairs_into_db():
             print("Cannot crawl {}.".format(currency))
 
 
+def reconstruct(df, prediction_delay=7):
+
+    def fillnan4df(df):
+        data = df.copy()
+        data = data.groupby(df.index)["Text"].agg(list)
+        index = pd.date_range(start=str(data.index.min()), end=str(data.index.max()), freq='D')
+        data.index = pd.DatetimeIndex(data.index)
+        data = data.reindex(index, fill_value=None)
+        data = pd.DataFrame(data)
+        return data
+
+    def add_function(row, prediction_delay=7):
+        total = []
+        for i in range(prediction_delay):
+            if str(row[i]) != "nan":
+                total += row[i]
+            elif np.dtype(np.float) != type(row[i]):
+                total += row[i]
+        return total
+
+    def eliminate_nan_in_list(content_list):
+        return [content for content in content_list if type(content) != np.dtype(np.float)]
+
+    data = fillnan4df(df)
+    prev_news = deque(maxlen=prediction_delay)
+
+    news_seperate_ndays = []
+    for idx, news in enumerate(data.Text):
+        prev_news.append(news)
+        if len(prev_news) == prediction_delay:
+            n_days_news = list(prev_news)
+            news_seperate_ndays.append(n_days_news)
+
+    # Collect data from previous prediction_delay days
+    start_date = pd.to_datetime(df.index.min()) + relativedelta(days=+(prediction_delay-1))
+    end_date = pd.to_datetime(df.index.max())
+    index = pd.date_range(start_date, end_date, freq='D')
+    data = pd.DataFrame(news_seperate_ndays, index=index)
+    data = data.apply(add_function, axis=1)
+    data = pd.DataFrame(data, columns=["tweets"])
+
+    return data
+
+
+def expand_sentiment_score(text_data):
+    sentiment_scores, subjectivity_scores = [], []
+    for tweet_row in tqdm(list(text_data.tweets)):
+        polarity_list, subjectivity_list = [], []
+        for tweet in tweet_row:
+            blob = TextBlob(tweet)
+            polarity_list.append(round(blob.sentiment.polarity, 4))
+            subjectivity_list.append(round(blob.sentiment.subjectivity, 4))
+        polarity_mean = np.mean(polarity_list)
+        subjectivity_mean = np.mean(subjectivity_list)
+        sentiment_scores.append(polarity_mean)
+        subjectivity_scores.append(subjectivity_mean)
+    text_data["polarity"] = np.array(sentiment_scores)
+    text_data["subjectivity"] = np.array(subjectivity_scores)
+    return text_data
+
+
 def main():
-    data = read_forex_table_from_db("USDCHF")
+    fx_data = read_forex_table_from_db("EURUSD")
+    text_data = joblib.load("./data/tweets_sentiment.bin")
+
+    data = pd.concat([fx_data, text_data], join="inner", axis=1)
     print(data)
+    plt.figure(figsize=(15, 10))
+    plt.plot(data.Close, label="Close Price")
+    plt.plot(data.Close.pct_change(), label="returns")
+    plt.plot(data.polarity, label="polarity", alpha=0.7)
+    plt.plot(data.subjectivity, label="subjectivity", alpha=0.7)
+    plt.legend()
+    plt.grid()
+    plt.show()
 
 
 if __name__ =="__main__":

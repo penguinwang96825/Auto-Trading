@@ -1,5 +1,7 @@
+import data_handler
 import pandas as pd
 import numpy as np
+import matplotlib.pyplot as plt
 from scipy.stats import jarque_bera
 from scipy.stats import norm
 
@@ -118,7 +120,7 @@ def sharpe_ratio(r, risk_free_rate, periods_per_year):
     return ann_ex_ret/ann_vol
 
 
-def drawdown(return_series: pd.Series, cash=1000):
+def drawdown(return_series, cash=1000):
     """
     Args:
         return_series (:obj: pd.DataFrame):
@@ -138,9 +140,38 @@ def drawdown(return_series: pd.Series, cash=1000):
     })
 
 
+def portfolio_return(weights, returns):
+    return weights.T @ returns
+
+
+def portfolio_vol(weights, covmat):
+    return (weights.T @ covmat @ weights)**0.5
+
+
+def plot_efficient_frontier_2(n_points, er, cov):
+    if er.shape[0] != 2 or cov.shape[0] != 2:
+        raise ValueError("plot_efficient_frontier_2 can only plot 2-asset frontiers!")
+    weights = [np.array([w, 1-w]) for w in np.linspace(0, 1, n_points)]
+    rets = [portfolio_return(w, er) for w in weights]
+    vols = [portfolio_vol(w, cov) for w in weights]
+    ef = pd.DataFrame({"Returns": rets, "Volatility": vols})
+    plt.figure(figsize=(15, 10))
+    plt.scatter(ef.Volatility, ef.Returns)
+    plt.show()
+
+
 def main():
-    r = np.random.normal(0, 0.1, size=(10000, 1))
-    print(is_normal(r))
+    data1 = data_handler.read_stock_table_from_db("GOOG").Close
+    data2 = data_handler.read_stock_table_from_db("AAPL").Close
+    data = pd.concat([data1, data2], axis=1, join="inner")
+    data.columns = ["GOOG", "AAPL"]
+    returns = data.pct_change()
+    er = annualise_rets(returns, periods_per_year=252)
+    cov = returns.cov()
+    weights = np.repeat(1/2, 2)
+
+    n_points = 100
+    plot_efficient_frontier_2(n_points, er, cov)
 
 
 if __name__ =="__main__":

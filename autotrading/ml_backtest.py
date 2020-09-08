@@ -9,6 +9,7 @@ import plotly
 import risk_kit
 import classifier
 import visualiser
+import data_handler
 import numpy as np
 import pandas as pd
 import yfinance as yf
@@ -45,7 +46,8 @@ def generate_feature(data):
     low = data.Low.values
     close = data.Close.values
 
-    feature_df = pd.DataFrame(index=data.index)
+    # feature_df = pd.DataFrame(index=data.index)
+    feature_df = data.copy()
     feature_df["ADX"] = ADX = talib.ADX(high, low, close, timeperiod=14)
     feature_df["ADXR"] = ADXR = talib.ADXR(high, low, close, timeperiod=14)
     feature_df["APO"] = APO = talib.APO(close, fastperiod=12, slowperiod=26, matype=0)
@@ -67,11 +69,9 @@ def generate_feature(data):
     feature_df["WILLR"] = WILLR = talib.WILLR(high, low, close, timeperiod=14)
     feature_df = feature_df.fillna(0.0)
 
-    matrix = np.stack((
-        ADX, ADXR, APO, AROONOSC, CCI, CMO, DX, MINUS_DI, ROCR100, ROC,
-        MINUS_DM, MOM, PLUS_DI, PLUS_DM, PPO, ROCP, WILLR, ULTOSC, RSI))
-    matrix = np.nan_to_num(matrix)
-    matrix = matrix.transpose()
+    # Exclude columns you don't want
+    feature_df = feature_df[feature_df.columns[~feature_df.columns.isin(['Open', 'High', 'Low', 'Close'])]]
+    matrix = feature_df.values
 
     return feature_df, matrix
 
@@ -410,12 +410,20 @@ class MLBacktest:
         self.cash = cash
         self.fee = fee
 
+        if Config.USE_TEXT_FEATURE:
+            # text = data_handler.read_twitter_table_from_db("tweets")
+            # text = data_handler.reconstruct(text)
+            # text = data_handler.expand_sentiment_score(text)
+            text_data = joblib.load("./data/tweets_sentiment.bin")
+            text_data = text_data[["polarity", "subjectivity"]]
+            data = pd.concat([data, text_data], join="inner", axis=1)
+
         self.dtrain = data.loc[:Config.TRAIN_VALID_SPLIT_DATE]
         self.dtest = data.loc[Config.TRAIN_VALID_SPLIT_DATE:]
         self.X_train_df, self.X_train = generate_feature(self.dtrain)
         self.X_test_df, self.X_test = generate_feature(self.dtest)
 
-    def run(self, plot=True, stats=True):
+    def run(self, plot=Config.PLOT_BACKTEST, stats=Config.PLOT_STATS):
         """
         Reference from https://gist.github.com/StockBoyzZ/396d48be23fd479a5ca62362b1bc8dc7#file-strategy_test-py
         Reference from https://github.com/kernc/backtesting.py/blob/1512f0e4cd483d7c0c00b6ad6953ca28322b3b7c/backtesting/backtesting.py
@@ -432,8 +440,8 @@ class MLBacktest:
         fee = self.fee
 
         # Generate label
-        X_train = self.X_train
-        X_test = self.X_test
+        X_train = self.X_train_df
+        X_test = self.X_test_df
         y_train = generate_label(self.dtrain, method=Config.LEBELLING_METHOD)
         y_test = generate_label(self.dtest, method=Config.LEBELLING_METHOD)
 
@@ -528,33 +536,32 @@ class MLBacktest:
             resolution = getattr(_period, 'resolution_string', None) or _period.resolution
             return value.ceil(resolution)
 
+        s = pd.Series(dtype=object)
+        s.loc['Start'] = data.index[0]
+        s.loc['End'] = data.index[-1]
+        s.loc['Duration'] = s.End - s.Start
+        s.loc['Equity Final [$]'] = data.strategy_net_equity[-1]
+        s.loc['Equity Peak [$]'] = data.strategy_net_equity.max()
+        s.loc['Net Return [%]'] = (data.strategy_net_equity[-1] - data.strategy_net_equity[0]) / data.strategy_net_equity[0] * 100
+        s.loc['Buy & Hold Return [%]'] = (data.buy_and_hold_equity[-1] - data.buy_and_hold_equity[0]) / data.buy_and_hold_equity[0] * 100
+        s.loc['Annualized Return [%]'] = annualized_return = risk_kit.annualise_rets(data.strategy_net_return, 252)
+        s.loc['Annualized Volatility'] = annualized_volatility = risk_kit.annualise_vol(data.strategy_net_return, 252)
+        s.loc['# Trades'] = trade_count = len(sell_dates)
+        s.loc['# Trades Per Year'] = trade_count_per_year = trade_count / (data.shape[0]/252)
+        s.loc['Win Rate [%]'] = win_rate = (net_trade_return > 0).sum() / trade_count * 100
+        s.loc['Best Trade [%]'] = data.strategy_net_return.max() * 100
+        s.loc['Worst Trade [%]'] = data.strategy_net_return.min() * 100
+        dd = 1 - data.strategy_net_return / np.maximum.accumulate(data.strategy_net_return)
+        dd_dur, dd_peaks = _compute_drawdown_duration_peaks(pd.Series(dd, index=data.index))
+        s.loc['Max. Drawdown Date'] = risk_kit.drawdown(data.strategy_net_return)["drawdown"].idxmin()
+        s.loc['Max. Drawdown [%]'] = max_dd = -np.nan_to_num(dd.max()) * 100
+        s.loc['Avg. Drawdown [%]'] = -dd_peaks.mean() * 100
+        s.loc['Max. Drawdown Duration'] = _round_timedelta(dd_dur.max())
+        s.loc['Avg. Drawdown Duration'] = _round_timedelta(dd_dur.mean())
+        s.loc['Annualized Sharpe Ratio'] = (annualized_return - 0.01) / annualized_volatility
+        s.loc['Calmar Ratio'] = annualized_return / ((-max_dd / 100) or np.nan)
+
         if stats:
-            s = pd.Series(dtype=object)
-            s.loc['Start'] = data.index[0]
-            s.loc['End'] = data.index[-1]
-            s.loc['Duration'] = s.End - s.Start
-            s.loc['Equity Final [$]'] = data.strategy_net_equity[-1]
-            s.loc['Equity Peak [$]'] = data.strategy_net_equity.max()
-            s.loc['Net Return [%]'] = (data.strategy_net_equity[-1] - data.strategy_net_equity[0]) / data.strategy_net_equity[0] * 100
-            s.loc['Buy & Hold Return [%]'] = (data.buy_and_hold_equity[-1] - data.buy_and_hold_equity[0]) / data.buy_and_hold_equity[0] * 100
-            # s.loc['Mean Return Per Day'] = return_per_day = (trade_return+1).prod()**(1/data.shape[0]) - 1
-            # s.loc['Mean Net Return Per Day'] = net_return_per_day = (data.strategy_net_return+1).prod()**(1/data.shape[0]) - 1
-            s.loc['Annualized Return [%]'] = annualized_return = risk_kit.annualise_rets(data.strategy_net_return, 252)
-            s.loc['Annualized Volatility'] = annualized_volatility = risk_kit.annualise_vol(data.strategy_net_return, 252)
-            s.loc['# Trades'] = trade_count = len(sell_dates)
-            s.loc['# Trades Per Year'] = trade_count_per_year = trade_count / (data.shape[0]/252)
-            s.loc['Win Rate [%]'] = win_rate = (net_trade_return > 0).sum() / trade_count * 100
-            s.loc['Best Trade [%]'] = data.strategy_net_return.max() * 100
-            s.loc['Worst Trade [%]'] = data.strategy_net_return.min() * 100
-            dd = 1 - data.strategy_net_return / np.maximum.accumulate(data.strategy_net_return)
-            dd_dur, dd_peaks = _compute_drawdown_duration_peaks(pd.Series(dd, index=data.index))
-            s.loc['Max. Drawdown Date'] = risk_kit.drawdown(data.strategy_net_return)["drawdown"].idxmin()
-            s.loc['Max. Drawdown [%]'] = max_dd = -np.nan_to_num(dd.max()) * 100
-            s.loc['Avg. Drawdown [%]'] = -dd_peaks.mean() * 100
-            s.loc['Max. Drawdown Duration'] = _round_timedelta(dd_dur.max())
-            s.loc['Avg. Drawdown Duration'] = _round_timedelta(dd_dur.mean())
-            s.loc['Annualized Sharpe Ratio'] = (annualized_return - 0.01) / annualized_volatility
-            s.loc['Calmar Ratio'] = annualized_return / ((-max_dd / 100) or np.nan)
             print(s)
 
         def plot_drawdown_underwater(returns, ax=None, **kwargs):
@@ -630,13 +637,12 @@ class MLBacktest:
 
 def main():
     global Config
-    # Get data and split into train dataset and test dataset
-    data = yf.download(Config.SYMBOL)
+    # Get data from database
+    data = data_handler.read_stock_table_from_db("AAPL")
 
     # Backtest for machine learning
     bt = MLBacktest(data=data, strategy=Config.STRATEGY, cash=Config.CASH, fee=Config.FEE)
-    data, stats = bt.run()
-    print(data)
+    data, stats = bt.run(plot=Config.PLOT_BACKTEST, stats=Config.PLOT_STATS)
     data.to_csv("./results/backtest.csv")
 
 
