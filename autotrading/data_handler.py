@@ -121,7 +121,7 @@ def create_currency_pairs_into_db():
 
 
 def main():
-    create_sp500_stock_tables_into_db()
+    df = read_stock_table_from_db("GOOG")
 
 
 if __name__ =="__main__":
