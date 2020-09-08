@@ -1,0 +1,23 @@
+.my-flex-container{
+  border: 2px solid blue;
+  height: 100px;
+  margin-bottom: 20px;
+}
+
+.my-flex-container-column{
+  border: 2px solid blue;
+  height: 200px;
+  margin-bottom: 20px;
+}
+
+.my-flex-item{
+  background-color: white;
+  border: 1px dotted grey;
+  height: 48px;
+  width: 100%
+}
+
+/* #chart_div{
+  width: 500px;
+  height: 250px;
+} */

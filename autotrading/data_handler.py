@@ -9,6 +9,7 @@ import warnings
 import pandas as pd
 import numpy as np
 import yfinance as yf
+<<<<<<< HEAD
 import matplotlib.pyplot as plt
 import seaborn as sns
 from tqdm import tqdm
@@ -20,6 +21,9 @@ from transformers import pipeline
 from textblob import TextBlob
 global API_Config
 warnings.filterwarnings("ignore")
+=======
+from sqlalchemy import create_engine
+>>>>>>> fa28eb491d93ce5c32e49e59e1adbd293cbbc129
 
 
 def progressbar(iter, prefix="", size=100, file=sys.stdout):
@@ -209,6 +213,7 @@ def expand_sentiment_score(text_data):
 
 
 def main():
+<<<<<<< HEAD
     fx_data = read_forex_table_from_db("EURUSD")
     text_data = joblib.load("./data/tweets_sentiment.bin")
 
@@ -222,6 +227,9 @@ def main():
     plt.legend()
     plt.grid()
     plt.show()
+=======
+    df = read_stock_table_from_db("GOOG")
+>>>>>>> fa28eb491d93ce5c32e49e59e1adbd293cbbc129
 
 
 if __name__ =="__main__":
