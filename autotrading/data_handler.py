@@ -5,9 +5,7 @@ import joblib
 import requests
 import pandas as pd
 import yfinance as yf
-from api_key_config import API_Config
 from sqlalchemy import create_engine
-global API_Config
 
 
 def progressbar(iter, prefix="", size=100, file=sys.stdout):
@@ -123,8 +121,7 @@ def create_currency_pairs_into_db():
 
 
 def main():
-    data = read_forex_table_from_db("USDCHF")
-    print(data)
+    create_sp500_stock_tables_into_db()
 
 
 if __name__ =="__main__":
