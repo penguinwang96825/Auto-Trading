@@ -7,8 +7,6 @@
 from autotrading import data_handler
 from flask import Flask, jsonify, render_template, url_for
 import pandas as pd
-# from flask_googlecharts import GoogleCharts, BarChart, MaterialLineChart
-# from flask_googlecharts.utils import prep_data
 
 app = Flask(__name__)
 
@@ -18,7 +16,6 @@ def index():
 
 @app.route('/data', methods=["GET"])
 def request():
-    #data = pd.read_json("./GOOG.json", orient="split")
     choose_cols = ["Close"]
     df = data_handler.read_stock_table_from_db("GOOG")[choose_cols]
     df = df.reset_index(drop=False, inplace=False)
