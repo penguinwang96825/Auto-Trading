@@ -9,7 +9,6 @@ import numpy as np
 from multiprocessing import Pool
 from tqdm import tqdm
 from bs4 import BeautifulSoup
-from api_key_config import USER_AGENT_LIST
 warnings.filterwarnings("ignore")
 
 
@@ -108,3 +107,5 @@ if __name__ == "__main__":
     crawler = AsynchronousCrawler(url_lists)
     res = crawler.asynchronous()
     results = crawler.collate_responses(res)
+    data = pd.DataFrame(results)
+    data.to_csv("./data/reuters.csv")
