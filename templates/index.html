@@ -14,33 +14,45 @@
 
   <!-- Custom CSS -->
   <link rel="stylesheet" href="../static/style.css">
-  <link rel="stylesheet" href="../fontawesome-free-5.14.0-web/css/all.css">
+  <link rel="stylesheet" href="../static/fontawesome-free-5.14.0-web/css/all.css">
 
   <!-- Custom JS -->
-  <script src="../chart.js" type="text/javascript"></script>
+  <script src="../static/chart.js" type="text/javascript"></script>
   <script type="text/javascript">
-    google.charts.load('current', {
-      'packages': ['gauge']
-    });
-    google.charts.setOnLoadCallback(drawGauge);
+    async function drawLineChart() {
+      // Get data from flask
+      var response = await fetch("http://127.0.0.1:5000/data");
+      // Convert promise object to json
+      var fetchedData = await response.json();
+      fetchedData = fetchedData["data"];
 
-    function drawLineChart() {
-      var data = google.visualization.arrayToDataTable([
-        '{{ data|safe }}'
-      ]);
+      // Convert Datetime to Javascript Date object
+      for (i = 1; i < fetchedData.length; i++) {
+        fetchedData[i][0] = new Date(fetchedData[i][0]);
+      }
+
+      var data = google.visualization.arrayToDataTable(fetchedData);
+
 
       var options = {
         title: 'Company Performance',
         curveType: 'function',
         legend: {
           position: 'bottom'
+        },
+        hAxis: {
+          format: 'yyyy/MM/dd',
         }
       };
-
-      var chart = new google.visualization.LineChart(document.getElementById('curve_chart'));
+      var chart = new google.visualization.LineChart(document.getElementById('chart_div'));
 
       chart.draw(data, options);
     }
+
+    google.charts.load('current', {
+      'packages': ['corechart']
+    });
+    google.charts.setOnLoadCallback(drawLineChart);
   </script>
 
   <title>Hello, Yang!</title>
@@ -58,8 +70,8 @@
         </div>
       </div>
 
-      <div class="card justify-content-center">
-        <div class="card-img-top" id="curve_chart"></div>
+      <div class="card justify-content-center my-flex-container-column">
+        <div class="card-img-top" id="chart_div"></div>
       </div>
 
     </div>
