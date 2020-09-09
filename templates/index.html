@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 <!DOCTYPE html>
 <html lang="en">
 
@@ -86,3 +87,48 @@
 </body>
 
 </html>
+=======
+<html>
+
+<head>
+    <!--Load the AJAX API-->
+    <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
+    <script type="text/javascript">
+        async function drawLineChart() {
+            // Get data from flask
+            var response = await fetch("http://localhost:5000/data");
+            // Convert promise object to json
+            var fetchedData = await response.json();
+
+            var data = google.visualization.arrayToDataTable(fetchedData["data"]);
+
+            var options = {
+                title: 'Stock Price',
+                curveType: 'function',
+                legend: {
+                  position: 'bottom'
+                },
+                hAxis: {
+                  title :'Date'
+                }
+            };
+
+            var chart = new google.visualization.LineChart(document.getElementById('chart_div'));
+
+            chart.draw(data, options);
+        }
+
+        google.charts.load('current', {
+            'packages': ['corechart']
+        });
+        google.charts.setOnLoadCallback(drawLineChart);
+    </script>
+</head>
+
+<body>
+    <!--Div that will hold the pie chart-->
+    <div id="chart_div"></div>
+</body>
+
+</html>
+>>>>>>> 0ed3b44b4b9e5a9f25278b870c9816a252be37a8

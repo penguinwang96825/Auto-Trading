@@ -1,7 +1,10 @@
+import data_handler
 import pandas as pd
 import numpy as np
+import matplotlib.pyplot as plt
 from scipy.stats import jarque_bera
 from scipy.stats import norm
+from scipy.optimize import minimize
 
 
 def semi_deviation(r):
@@ -118,7 +121,7 @@ def sharpe_ratio(r, risk_free_rate, periods_per_year):
     return ann_ex_ret/ann_vol
 
 
-def drawdown(return_series: pd.Series, cash=1000):
+def drawdown(return_series, cash=1000):
     """
     Args:
         return_series (:obj: pd.DataFrame):
@@ -138,9 +141,81 @@ def drawdown(return_series: pd.Series, cash=1000):
     })
 
 
+def portfolio_return(weights, returns):
+    return weights.T @ returns
+
+
+def portfolio_vol(weights, covmat):
+    return (weights.T @ covmat @ weights)**0.5
+
+
+def plot_binary_efficient_frontier(n_points, er, cov):
+    if er.shape[0] != 2 or cov.shape[0] != 2:
+        raise ValueError("plot_efficient_frontier_2 can only plot 2-asset frontiers!")
+    weights = [np.array([w, 1-w]) for w in np.linspace(0, 1, n_points)]
+    rets = [portfolio_return(w, er) for w in weights]
+    vols = [portfolio_vol(w, cov) for w in weights]
+    ef = pd.DataFrame({"Returns": rets, "Volatility": vols})
+    plt.figure(figsize=(15, 10))
+    plt.scatter(ef.Volatility, ef.Returns)
+    plt.show()
+
+
+def minimize_vol(target_return, er, cov):
+    n = er.shape[0]
+    init_guess = np.repeat(1/n, n)
+    bounds = ((0.0, 1.0), )*n
+    return_is_target = {
+        "type": "eq",
+        "args": (er, ),
+        "fun": lambda weights, er: target_return - portfolio_return(weights, er)
+    }
+    weights_sum_to_one = {
+        "type": "eq",
+        "fun": lambda weights: np.sum(weights) - 1
+    }
+    results = minimize(
+        portfolio_vol,
+        init_guess,
+        args=(cov, ),
+        method="SLSQP",
+        options={"disp": False},
+        constraints=(return_is_target, weights_sum_to_one),
+        bounds=bounds)
+    return results.x
+
+
+def optimal_weights(n_points, er, cov):
+    target_rs = np.linspace(er.min(), er.max(), n_points)
+    weights = [minimize_vol(target_return, er, cov) for target_return in target_rs]
+    return weights
+
+
+def plot_multi_efficient_frontier(n_points, er, cov):
+    weights = optimal_weights(n_points, er, cov)
+    rets = [portfolio_return(w, er) for w in weights]
+    vols = [portfolio_vol(w, cov) for w in weights]
+    ef = pd.DataFrame({"Returns": rets, "Volatility": vols})
+    plt.figure(figsize=(15, 10))
+    plt.scatter(ef.Volatility, ef.Returns)
+    plt.show()
+
+
 def main():
-    r = np.random.normal(0, 0.1, size=(10000, 1))
-    print(is_normal(r))
+    data1 = data_handler.read_stock_table_from_db("GOOG").Close
+    data2 = data_handler.read_stock_table_from_db("AAPL").Close
+    data3 = data_handler.read_stock_table_from_db("MSFT").Close
+    data4 = data_handler.read_stock_table_from_db("AMZN").Close
+    data = pd.concat([data1, data2, data3, data4], axis=1, join="inner")
+    data.columns = ["GOOG", "AAPL", "MSFT", "AMZN"]
+    returns = data.pct_change()
+    er = annualise_rets(returns, periods_per_year=252)
+    cov = returns.cov()
+    w15 = minimize_vol(0.15, er, cov)
+    vol15 = portfolio_vol(w15, cov)
+    print(w15)
+    print(vol15)
+    plot_multi_efficient_frontier(200, er, cov)
 
 
 if __name__ =="__main__":

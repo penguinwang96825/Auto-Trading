@@ -45,7 +45,8 @@ def ridge_opt(X_train, y_train, X_test, y_test):
     _, clf = optimizer.fit(X_train, y_train, n_iters=Config.HYPEROPT_MAX_EVAL)
     clf.fit(X_train, y_train)
     y_pred = clf.predict(X_test)
-    print(classification_report(y_test, y_pred))
+    if Config.PRINT_CLASSIFICATION_REPORT:
+        print(classification_report(y_test, y_pred))
 
     # Save model
     folder_path = "./checkpoints"
@@ -70,7 +71,8 @@ def mlp_opt(X_train, y_train, X_test, y_test):
     _, clf = optimizer.fit(X_train, y_train, n_iters=Config.HYPEROPT_MAX_EVAL)
     clf.fit(X_train, y_train)
     y_pred = clf.predict(X_test)
-    print(classification_report(y_test, y_pred))
+    if Config.PRINT_CLASSIFICATION_REPORT:
+        print(classification_report(y_test, y_pred))
 
     # Save model
     folder_path = "./checkpoints"
@@ -95,7 +97,8 @@ def sgd_opt(X_train, y_train, X_test, y_test):
     _, clf = optimizer.fit(X_train, y_train, n_iters=Config.HYPEROPT_MAX_EVAL)
     clf.fit(X_train, y_train)
     y_pred = clf.predict(X_test)
-    print(classification_report(y_test, y_pred))
+    if Config.PRINT_CLASSIFICATION_REPORT:
+        print(classification_report(y_test, y_pred))
 
     # Save model
     folder_path = "./checkpoints"
@@ -120,7 +123,8 @@ def svm_opt(X_train, y_train, X_test, y_test):
     _, clf = optimizer.fit(X_train, y_train, n_iters=Config.HYPEROPT_MAX_EVAL)
     clf.fit(X_train, y_train)
     y_pred = clf.predict(X_test)
-    print(classification_report(y_test, y_pred))
+    if Config.PRINT_CLASSIFICATION_REPORT:
+        print(classification_report(y_test, y_pred))
 
     # Save model
     folder_path = "./checkpoints"
@@ -145,7 +149,8 @@ def knn_opt(X_train, y_train, X_test, y_test):
     _, clf = optimizer.fit(X_train, y_train, n_iters=Config.HYPEROPT_MAX_EVAL)
     clf.fit(X_train, y_train)
     y_pred = clf.predict(X_test)
-    print(classification_report(y_test, y_pred))
+    if Config.PRINT_CLASSIFICATION_REPORT:
+        print(classification_report(y_test, y_pred))
 
     # Save model
     folder_path = "./checkpoints"
@@ -163,7 +168,8 @@ def gpc_opt(X_train, y_train, X_test, y_test):
     clf = GaussianProcessClassifier(kernel=1.0*RBF(1.0), random_state=Config.SEED)
     clf.fit(X_train, y_train)
     y_pred = clf.predict(X_test)
-    print(classification_report(y_test, y_pred))
+    if Config.PRINT_CLASSIFICATION_REPORT:
+        print(classification_report(y_test, y_pred))
 
     # Save model
     folder_path = "./checkpoints"
@@ -181,7 +187,8 @@ def gnb_opt(X_train, y_train, X_test, y_test):
     clf = naive_bayes.GaussianNB()
     clf.fit(X_train, y_train)
     y_pred = clf.predict(X_test)
-    print(classification_report(y_test, y_pred))
+    if Config.PRINT_CLASSIFICATION_REPORT:
+        print(classification_report(y_test, y_pred))
 
     # Save model
     folder_path = "./checkpoints"
@@ -208,7 +215,8 @@ def dtc_opt(X_train, y_train, X_test, y_test):
     _, clf = optimizer.fit(X_train, y_train, n_iters=Config.HYPEROPT_MAX_EVAL)
     clf.fit(X_train, y_train)
     y_pred = clf.predict(X_test)
-    print(classification_report(y_test, y_pred))
+    if Config.PRINT_CLASSIFICATION_REPORT:
+        print(classification_report(y_test, y_pred))
 
     # Save model
     folder_path = "./checkpoints"
@@ -234,7 +242,8 @@ def ada_opt(X_train, y_train, X_test, y_test):
     _, clf = optimizer.fit(X_train, y_train, n_iters=Config.HYPEROPT_MAX_EVAL)
     clf.fit(X_train, y_train)
     y_pred = clf.predict(X_test)
-    print(classification_report(y_test, y_pred))
+    if Config.PRINT_CLASSIFICATION_REPORT:
+        print(classification_report(y_test, y_pred))
 
     # Save model
     folder_path = "./checkpoints"
@@ -263,7 +272,8 @@ def gbc_opt(X_train, y_train, X_test, y_test):
     _, clf = optimizer.fit(X_train, y_train, n_iters=Config.HYPEROPT_MAX_EVAL)
     clf.fit(X_train, y_train)
     y_pred = clf.predict(X_test)
-    print(classification_report(y_test, y_pred))
+    if Config.PRINT_CLASSIFICATION_REPORT:
+        print(classification_report(y_test, y_pred))
 
     # Save model
     folder_path = "./checkpoints"
@@ -302,7 +312,8 @@ def lgbm_opt(X_train, y_train, X_test, y_test):
         max_depth=int(best['max_depth']),learning_rate=best['learning_rate'])
     clf.fit(X_train, y_train)
     y_pred = clf.predict(X_test)
-    print(classification_report(y_test, y_pred))
+    if Config.PRINT_CLASSIFICATION_REPORT:
+        print(classification_report(y_test, y_pred))
 
     # Save model
     folder_path = "./checkpoints"
@@ -351,7 +362,8 @@ def xgb_opt(X_train, y_train, X_test, y_test):
         gamma=best['gamma'], subsample=best['subsample'])
     clf.fit(X_train, y_train)
     y_pred = clf.predict(X_test)
-    print(classification_report(y_test, y_pred))
+    if Config.PRINT_CLASSIFICATION_REPORT:
+        print(classification_report(y_test, y_pred))
 
     # Save model
     folder_path = "./checkpoints"
@@ -388,7 +400,8 @@ def cat_opt(X_train, y_train, X_test, y_test):
         depth=int(best['depth']),learning_rate=best['learning_rate'])
     clf.fit(X_train, y_train)
     y_pred = clf.predict(X_test)
-    print(classification_report(y_test, y_pred))
+    if Config.PRINT_CLASSIFICATION_REPORT:
+        print(classification_report(y_test, y_pred))
 
     # Save model
     folder_path = "./checkpoints"
