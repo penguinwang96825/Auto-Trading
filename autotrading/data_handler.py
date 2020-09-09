@@ -9,21 +9,16 @@ import warnings
 import pandas as pd
 import numpy as np
 import yfinance as yf
-<<<<<<< HEAD
 import matplotlib.pyplot as plt
 import seaborn as sns
 from tqdm import tqdm
 from collections import deque
 from dateutil.relativedelta import relativedelta
-from api_key_config import API_Config
 from sqlalchemy import create_engine
 from transformers import pipeline
 from textblob import TextBlob
 global API_Config
 warnings.filterwarnings("ignore")
-=======
-from sqlalchemy import create_engine
->>>>>>> fa28eb491d93ce5c32e49e59e1adbd293cbbc129
 
 
 def progressbar(iter, prefix="", size=100, file=sys.stdout):
@@ -46,7 +41,7 @@ def crawl_forex_data(currency, start_date="2015-09-04", end_date="2020-09-04"):
     """
     Crawl forex data from https://marketdata.tradermade.com
     """
-    api_key = API_Config.TRADE_MADE_API_KEY
+    api_key = "7Raj9F_tie_yNO4_nGsh"
     url = "https://marketdata.tradermade.com/api/v1/timeseries"
     querystring = {
         "currency": currency,
@@ -213,7 +208,6 @@ def expand_sentiment_score(text_data):
 
 
 def main():
-<<<<<<< HEAD
     fx_data = read_forex_table_from_db("EURUSD")
     text_data = joblib.load("./data/tweets_sentiment.bin")
 
@@ -227,9 +221,6 @@ def main():
     plt.legend()
     plt.grid()
     plt.show()
-=======
-    df = read_stock_table_from_db("GOOG")
->>>>>>> fa28eb491d93ce5c32e49e59e1adbd293cbbc129
 
 
 if __name__ =="__main__":
