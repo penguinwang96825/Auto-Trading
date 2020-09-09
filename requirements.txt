@@ -3,6 +3,7 @@ empyrical==0.5.3
 joblib==0.13.2
 hyperopt==0.2.4
 hpsklearn==0.1.0
+flask_cors==3.0.9
 numpy==1.16.4
 matplotlib==3.1.0
 lightgbm==3.0.0
