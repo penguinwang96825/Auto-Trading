@@ -7,6 +7,28 @@ from scipy.stats import norm
 from scipy.optimize import minimize
 
 
+def get_ind_returns(symbol):
+    """
+    Args:
+        symbol (:obj: str or list of str):
+
+    Returns:
+        pd.Seried or pd.DataFrame
+    """
+    if isinstance(symbol, str):
+        data = data_handler.read_stock_table_from_db(symbol).Close
+        return data.pct_change()
+    elif isinstance(symbol, list):
+        d = {name: pd.DataFrame() for name in symbol}
+        list_of_df = []
+        for name, df in d.items():
+            df = data_handler.read_stock_table_from_db(name).Close
+            list_of_df.append(df)
+        data = pd.concat(list_of_df, axis=1, join="inner")
+        data.columns = symbol
+        return data.pct_change()
+
+
 def semi_deviation(r):
     is_negative = r < 0
     return r[is_negative].std(ddof=0)
@@ -149,7 +171,7 @@ def portfolio_vol(weights, covmat):
     return (weights.T @ covmat @ weights)**0.5
 
 
-def plot_binary_efficient_frontier(n_points, er, cov):
+def plot_binary_efficient_frontier(er, cov, n_points=100):
     if er.shape[0] != 2 or cov.shape[0] != 2:
         raise ValueError("plot_efficient_frontier_2 can only plot 2-asset frontiers!")
     weights = [np.array([w, 1-w]) for w in np.linspace(0, 1, n_points)]
@@ -162,6 +184,17 @@ def plot_binary_efficient_frontier(n_points, er, cov):
 
 
 def minimize_vol(target_return, er, cov):
+    """
+    Get weights that can minimize volatility.
+
+    Args:
+        target_return (:obj: float):
+        er (:obj: pd.DataFrame):
+        cov (:obj: pd.DataFrame):
+
+    Returns:
+        weights (:obj: np.array)
+    """
     n = er.shape[0]
     init_guess = np.repeat(1/n, n)
     bounds = ((0.0, 1.0), )*n
@@ -175,8 +208,8 @@ def minimize_vol(target_return, er, cov):
         "fun": lambda weights: np.sum(weights) - 1
     }
     results = minimize(
-        portfolio_vol,
-        init_guess,
+        fun=portfolio_vol,
+        x0=init_guess,
         args=(cov, ),
         method="SLSQP",
         options={"disp": False},
@@ -185,14 +218,14 @@ def minimize_vol(target_return, er, cov):
     return results.x
 
 
-def optimal_weights(n_points, er, cov):
+def optimal_weights(er, cov, n_points=100):
     target_rs = np.linspace(er.min(), er.max(), n_points)
     weights = [minimize_vol(target_return, er, cov) for target_return in target_rs]
     return weights
 
 
-def plot_multi_efficient_frontier(n_points, er, cov):
-    weights = optimal_weights(n_points, er, cov)
+def plot_multi_efficient_frontier(er, cov, n_points=100):
+    weights = optimal_weights(er, cov, n_points)
     rets = [portfolio_return(w, er) for w in weights]
     vols = [portfolio_vol(w, cov) for w in weights]
     ef = pd.DataFrame({"Returns": rets, "Volatility": vols})
@@ -202,20 +235,10 @@ def plot_multi_efficient_frontier(n_points, er, cov):
 
 
 def main():
-    data1 = data_handler.read_stock_table_from_db("GOOG").Close
-    data2 = data_handler.read_stock_table_from_db("AAPL").Close
-    data3 = data_handler.read_stock_table_from_db("MSFT").Close
-    data4 = data_handler.read_stock_table_from_db("AMZN").Close
-    data = pd.concat([data1, data2, data3, data4], axis=1, join="inner")
-    data.columns = ["GOOG", "AAPL", "MSFT", "AMZN"]
-    returns = data.pct_change()
+    returns = get_ind_returns(symbol=["GOOG", "AAPL", "MSFT", "AMZN"])
     er = annualise_rets(returns, periods_per_year=252)
-    cov = returns.cov()
-    w15 = minimize_vol(0.15, er, cov)
-    vol15 = portfolio_vol(w15, cov)
-    print(w15)
-    print(vol15)
-    plot_multi_efficient_frontier(200, er, cov)
+    covmat = returns.cov()
+    plot_multi_efficient_frontier(er, covmat)
 
 
 if __name__ =="__main__":
