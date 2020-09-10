@@ -69,7 +69,7 @@ def crawl_stock_data(symbol):
     """
     Crawl forex data from yahoo finance API.
     """
-    data = yf.download(symbol)
+    data = yf.download(symbol, progress=False)
     database_path = 'sqlite:///data/data.db'
     engine = create_engine(database_path, echo=False)
     data.to_sql(symbol, con=engine, if_exists='replace')
@@ -120,12 +120,17 @@ def crawl_sp500_component_stocks_table():
 
 
 def create_sp500_stock_tables_into_db():
+    """
+    Only "BRK.B" and "BF.B" will fail.
+    """
     data = crawl_sp500_component_stocks_table()
     symbol_list = list(data.Symbol)
     fail_list = []
     for symbol in progressbar(symbol_list):
         try:
-            _ = crawl_stock_data(symbol)
+            data = crawl_stock_data(symbol)
+            if data.shape[0] == 0:
+                fail_list.append(symbol)
         except:
             fail_list.append(symbol)
             print("Cannot crawl {}.".format(symbol))
@@ -208,19 +213,12 @@ def expand_sentiment_score(text_data):
 
 
 def main():
-    fx_data = read_forex_table_from_db("EURUSD")
-    text_data = joblib.load("./data/tweets_sentiment.bin")
-
-    data = pd.concat([fx_data, text_data], join="inner", axis=1)
-    print(data)
-    plt.figure(figsize=(15, 10))
-    plt.plot(data.Close, label="Close Price")
-    plt.plot(data.Close.pct_change(), label="returns")
-    plt.plot(data.polarity, label="polarity", alpha=0.7)
-    plt.plot(data.subjectivity, label="subjectivity", alpha=0.7)
-    plt.legend()
-    plt.grid()
-    plt.show()
+    crawl_stock_data("BRK-B")
+    data1 = read_stock_table_from_db("BRK-B")
+    print(data1)
+    crawl_stock_data("BF-B")
+    data2 = read_stock_table_from_db("BF-B")
+    print(data2)
 
 
 if __name__ =="__main__":
