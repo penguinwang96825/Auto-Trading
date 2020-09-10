@@ -1,3 +1,4 @@
+import sys
 import data_handler
 import requests
 import grequests
@@ -66,20 +67,29 @@ def get_content_from_url(url):
 
 
 class FeedbackCounter:
-    """Object to provide a feedback callback keeping track of total calls."""
-    def __init__(self):
+    """
+    Object to provide a feedback callback keeping track of total calls.
+    Reference from http://stackoverflow.com/questions/3173320/text-progress-bar-in-the-console
+    """
+    def __init__(self, list_len):
         self.counter = 0
+        self.list_len = list_len
 
-    def feedback(self, r, **kwargs):
+    def feedback(self, r, bar_length=200, **kwargs):
         self.counter += 1
-        print("{0} fetched, {1} total.".format(r.url, self.counter))
+        for _ in range(self.list_len):
+            percent = self.counter/self.list_len
+            hashes = '█' * int(round(percent * bar_length))
+            spaces = ' ' * (bar_length - len(hashes))
+            sys.stdout.write("\rPercent: [{0}] {1}%".format(hashes + spaces, int(round(percent * 100))))
+            sys.stdout.flush()
         return r
 
 
 class AsynchronousCrawler:
     def __init__(self, lst):
         self.urls = lst
-        self.fbc = FeedbackCounter()
+        self.fbc = FeedbackCounter(len(lst))
 
     def exception(self, request, exception):
         print("Problem: {}: {}".format(request.url, exception))
@@ -90,15 +100,15 @@ class AsynchronousCrawler:
             exception_handler=self.exception, size=10)
 
     def collate_responses(self, results):
-        return [self.parse(x.text) for x in results if x is not None]
+        return [self.parse(x) for x in results if x is not None]
 
-    def parse(self, response_text):
+    def parse(self, res):
         soup = BeautifulSoup(res.text, "html.parser")
         title = soup.find("h1").text
         date = soup.find("meta", {"name": "REVISION_DATE"}).get("content")
         content = [sent.text for sent in soup.find_all("p", text=True)]
         content = "".join(content)
-        return [date, title, content, url]
+        return [date, title, content]
 
 
 if __name__ == "__main__":
@@ -107,5 +117,5 @@ if __name__ == "__main__":
     crawler = AsynchronousCrawler(url_lists)
     res = crawler.asynchronous()
     results = crawler.collate_responses(res)
-    data = pd.DataFrame(results)
+    data = pd.DataFrame(results, columns=["Date", "Title", "Article"])
     data.to_csv("./data/reuters.csv")
