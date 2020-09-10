@@ -1,0 +1,182 @@
+﻿>59.py TXFF9
+['2019/05/24 16:11:07.96', 'TXFF9', '10357', '1', '3914', '10356', '10357']
+['2019/05/24 16:11:16.46', 'TXFF9', '10357', '1', '3915', '10356', '10357']
+
+>60.py
+['2019/05/24 16:13:51.33', 'TXFF9', '10355', '1', '3968', '10354', '10355']
+['2019/05/24 16:13:55.82', 'TXFF9', '10355', '1', '3969', '10354', '10355']
+
+>62.py
+[10355.] [10355.] [10355.] [10355.]
+[10355.] [10355.] [10355.] [10355.]
+
+>63.py
+[10355.] [10355.] [10355.] [10355.]
+[10355.] [10355.] [10355.] [10355.]
+
+>64.py
+[nan]
+[nan nan]
+
+>65.py
+[nan nan nan nan 5]
+[nan nan nan nan 6]
+
+>66.py
+[nan] [nan] [nan]
+[nan nan] [nan nan] [nan nan]
+
+>67.py
+[nan] [nan] [nan]
+[nan nan] [nan nan] [nan nan]
+
+>68.py
+[nan] [nan]
+[nan nan] [nan nan]
+
+>69.py
+[nan]
+[nan nan]
+
+>70.py
+[nan]
+[nan nan]
+
+>71.py
+[nan]
+[nan nan]
+
+>72.py
+[0, 2]
+[1, 2]
+
+>73.py
+夜盤很難測試，要日盤測
+
+>74.py
+2.611150317572336 2.4248170326014638
+2.6100141043723553 2.4248170326014638
+
+>75.py
+[2, 6]
+[9, 13]
+
+>76.py
+2019-05-24 16:34:10.960000 1
+2019-05-24 16:34:24.950000 3
+
+>81.py
+2019-05-24 15:19:33.740000 Order Buy Price: 10353.0 Success!
+
+>82.py
+2019-05-24 15:22:45.230000 Order Buy Price: 10353.0 Success!
+
+>83.py
+2019-05-24 15:23:51.660000 Order Buy Price: 10354.0 Success!
+
+>84.py
+2019-05-24 15:23:11.820000 Order Buy Price: 10353.0 Success!
+
+>85-1.py
+2019-05-24 15:24:32.750000 Order Buy Price: 10354.0 Success!
+
+>85-2.py
+2019-05-24 15:25:48.640000 Order Buy Price: 10353.0 Success!
+
+>86.py
+2019-05-24 15:25:06.380000 Order Buy Price: 10353.0 Success!
+
+>87.py
+2019-05-24 15:26:59.740000 Order Buy Price: 10354.0 Success!
+
+>88.py
+2019-05-24 15:26:03.080000 Order Buy Price: 10354.0 Success!
+
+>89.py
+2019-05-24 15:28:33.600000 Order Buy Price: 10354.0 Success!
+
+>90.py
+2019-05-24 15:28:56.780000 Order Buy Price: 10355.0 Success!
+
+>91.py
+2019-05-24 15:29:30.350000 Order Buy Price: 10355.0 Success!
+
+>92.py
+2019-05-24 15:40:24.720000 Order Buy Price: 10358.0 Success!
+
+>93-1.py
+2019-05-24 15:42:25.010000 Order Sell Price: 10357.0 Success!
+
+>93-2.py
+2019-05-24 15:43:02.860000 Order Sell Price: 10357.0 Success!
+
+>94.py
+2019-05-24 15:42:56.410000 Order Sell Price: 10357.0 Success!
+
+>97.py
+2019-05-24 15:41:24.550000 Order Buy Price: 10358.0 Success!
+2019-05-24 15:57:62.070000 Cover Buy Price: 10354.0 Success!
+
+>98.py
+2019-05-24 15:41:59.280000 Order Buy Price: 10358.0 Success!
+2019-05-24 15:55:36.790000 Cover Buy Price: 10355.0 Success!
+
+>99.py
+2019-05-24 15:42:05.980000 Order Sell Price: 10358.0 Success!
+2019-05-24 15:52:63.000000 Cover Sell Price: 10355.0 Success!
+
+>100.py
+2019-05-24 15:45:43.650000 Order Buy Price: 10357.0 Success!
+2019-05-24 16:09:22.050000 Cover Buy Price: 10353.0 Success!
+
+>101.py
+2019-05-24 15:46:18.320000 Order Buy Price: 10356.0 Success!
+2019-05-24 16:13:53.860000 Cover Buy Price: 10354.0 Success!
+
+>102.py
+2019-05-24 15:48:52.160000 Order Buy Price: 10356.0 Success!
+2019-05-24 16:06:44.630000 Cover Buy Price: 10355.0 Success!
+
+>103.py
+2019-05-24 15:50:21.520000 Order Buy Price: 10355.0 Success!
+2019-05-24 16:12:41.770000 Cover Buy Price: 10356.0 Success!
+
+>104.py
+2019-05-24 15:51:58.090000 Order Buy Price: 10355.0 Success!
+2019-05-24 16:15:33.750000 Cover Buy Price: 10357.0 Success!
+
+>105.py
+2019-05-24 15:53:02.850000 Order Buy Price: 10356.0 Success!
+2019-05-24 16:13:51.320000 Cover Buy Price: 10356.0 Success!
+
+>107.py
+2019-05-24 15:54:35.660000 Order Buy Price: 10355.0 Success!
+2019-05-24 16:43:33.750000 Cover Buy TakeProfit Price: 10375.0 Success!
+
+>108.py
+2019-05-24 15:55:09.630000 Order Buy Price: 10356.0 Success!
+2019-05-24 16:59:36.190000 Cover Buy Price: 10362.0 Success!
+
+>125.py
+2019-05-28 10:15:56.520000 Order Sell Price: 10321.0 Success!
+2019-05-28 13:20:01.020000 Cover Sell Price: 10336.0 Success!
+
+>126.py
+2019-05-28 10:15:59.510000 Order Buy Price: 10322.0 Success!
+2019-05-28 10:19:54.910000 Cover Buy Price: 10312.0 Success!
+
+>127.py
+2019-05-28 11:05:30.730000 Order Buy Price: 10329.0 Success!
+2019-05-28 11:45:32.320000 Cover Buy Price: 10324.0 Success!
+
+>128.py
+2019-05-28 11:10:01.220000 Order Sell Price: 10323.0 Success!
+2019-05-28 13:00:02.150000 Cover Sell Price: 10330.0 Success!
+
+>129.py
+2019-05-28 10:40:00.240000 Order Buy Price: 10325.0 Success!
+2019-05-28 13:20:01.020000 Cover Buy Price: 10336.0 Success!
+
+>130.py
+2019-05-28 10:28:00.630000 Order Sell Price: 10320.0 Success!
+2019-05-28 13:22:01.270000 Cover Sell Price: 10341.0 Success!

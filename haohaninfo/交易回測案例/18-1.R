@@ -1,0 +1,5 @@
+library('RMySQL')
+library('quantmod')
+options(width=70)
+options(digits=4)
+setwd('D:/Rdata')

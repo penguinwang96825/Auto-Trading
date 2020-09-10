@@ -1,0 +1,70 @@
+# -*- coding: UTF-8 -*-
+
+# 載入相關套件及函數
+import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
+import datetime
+import numpy as np
+from mpl_finance import candlestick_ohlc
+import backtest_function
+from talib import SMA,RSI
+
+# 取得歷史資料
+Data=backtest_function.GetI020()
+
+# 透過迴圈取得每天的資料
+for date in backtest_function.GetDate(Data):
+    
+    # 取得當日的時間
+    I020 = [ line for line in Data if line[0] == date ]
+
+    # 計算K線圖
+    KBar=backtest_function.ConvertKBar(date,I020)
+    KBar=[ [mdates.date2num(line[0]),line[1],line[2],line[3],line[4],line[5]] for line in KBar ]
+    
+    Time=[ line[0] for line in KBar ]
+    Close= np.array([ float(line[4]) for line in KBar ])
+    
+    # 將量能取出來
+    Volume_Time = [ line[0] for line in KBar]
+    Volume = [ line[5] for line in KBar]
+    
+    # 單獨取出K棒時間
+    KBarTime=[ line[0] for line in KBar ]
+    
+    # 定義標頭    
+    fig = plt.figure()
+    fig.suptitle("Strategy Chart", fontsize=16)
+    
+    # 定義圖表物件
+    grid = plt.GridSpec(5, 1)
+    ax1 = plt.subplot(grid[ 0:3,0 ] )
+    ax2 = plt.subplot(grid[ 3 , 0 ])
+    ax3 = plt.subplot(grid[ 4 , 0 ])
+    
+    # 繪製K線圖
+    candlestick_ohlc(ax1, KBar, width=0.0003, colorup='r', colordown='g')  
+    ax1.plot_date( Time,SMA(Close,timeperiod=10), 'b-' , linewidth=0.8)
+    
+    # 繪製RSI技術指標
+    ax2.plot_date( Time, RSI(Close,timeperiod=10), 'b-' )
+    ax2.plot_date( Time, np.repeat(50,len(Time)), 'y-')
+    
+    # 透過直線圖，也能夠達成相同效果，程式碼如下
+    ax3.vlines( Volume_Time,[0], Volume)
+
+    
+    # X軸的間隔設為半小時
+    plt.xticks(np.arange(min(KBarTime), max(KBarTime), 1/1440*30))
+    
+    # 定義x軸格式
+    hfmt = mdates.DateFormatter('%H:%M:%S')
+    ax1.get_xaxis().set_visible(False)
+    ax2.xaxis.set_major_formatter(hfmt)
+    ax3.xaxis.set_major_formatter(hfmt)
+
+    # 顯示繪製圖表
+    plt.show()
+
+    # 僅執行一天就離開 若要執行整個契約週期 可將該行移除
+    break

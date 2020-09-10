@@ -1,0 +1,4 @@
+如註冊API失敗，請點選API資料夾並自行註冊
+
+註冊API：對Install.bat點右鍵，並選擇以系統管理員身分執行
+解除API：對Uninstall.bat點右鍵，並選擇以系統管理員身分執行
