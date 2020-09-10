@@ -1,3 +1,93 @@
+<<<<<<< HEAD
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <!-- Required meta tags -->
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+  <!-- Bootstrap CSS -->
+  <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" integrity="sha384-JcKb8q3iqJ61gNV9KGb8thSsNjpSL0n8PARn9HuZOnIxN0hoP+VmmDGMN5t9UJ0Z" crossorigin="anonymous">
+
+  <!--Load the AJAX API-->
+  <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
+
+  <!-- Custom CSS -->
+  <link rel="stylesheet" href="../static/style.css">
+  <link rel="stylesheet" href="../static/fontawesome-free-5.14.0-web/css/all.css">
+
+  <!-- Custom JS -->
+  <script src="../static/chart.js" type="text/javascript"></script>
+  <script type="text/javascript">
+    async function drawLineChart() {
+      // Get data from flask
+      var response = await fetch("http://127.0.0.1:5000/data");
+      // Convert promise object to json
+      var fetchedData = await response.json();
+      fetchedData = fetchedData["data"];
+
+      // Convert Datetime to Javascript Date object
+      for (i = 1; i < fetchedData.length; i++) {
+        fetchedData[i][0] = new Date(fetchedData[i][0]);
+      }
+
+      var data = google.visualization.arrayToDataTable(fetchedData);
+
+
+      var options = {
+        title: 'Company Performance',
+        curveType: 'function',
+        legend: {
+          position: 'bottom'
+        },
+        hAxis: {
+          format: 'yyyy/MM/dd',
+        }
+      };
+      var chart = new google.visualization.LineChart(document.getElementById('chart_div'));
+
+      chart.draw(data, options);
+    }
+
+    google.charts.load('current', {
+      'packages': ['corechart']
+    });
+    google.charts.setOnLoadCallback(drawLineChart);
+  </script>
+
+  <title>Hello, Yang!</title>
+</head>
+
+<body>
+  <div class="background container-fluid" style="background-color:#9999ff">
+    <div class="container">
+      <div class="d-flex flex-column my-flex-container justify-content-center">
+        <div class="p-2 my-flex-item text-center" style="font-size:20px">Trading Website</div>
+        <div class="p-2 text-center my-flex-item justify-content-center">
+          <i class="fab fa-github"></i>
+          <i class="fab fa-linkedin"></i>
+          <i class="fab fa-line"></i>
+        </div>
+      </div>
+
+      <div class="card justify-content-center my-flex-container-column">
+        <div class="card-img-top" id="chart_div"></div>
+      </div>
+
+    </div>
+  </div>
+
+
+  <!-- Optional JavaScript -->
+  <!-- jQuery first, then Popper.js, then Bootstrap JS -->
+  <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js" integrity="sha384-DfXdz2htPH0lsSSs5nCTpuj/zy4C+OGpamoFVy38MVBnE+IbbVYUew+OrCXaRkfj" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.1/dist/umd/popper.min.js" integrity="sha384-9/reFTGAW83EW2RDu2S0VKaIzap3H66lZH81PoYlFhbGU+6BZp6G7niu735Sk7lN" crossorigin="anonymous"></script>
+  <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js" integrity="sha384-B4gt1jrGC7Jh4AgTPSdUtOBvfO8shuf57BaghqFfPlYxofvL8/KUEfYiJOMMV+rV" crossorigin="anonymous"></script>
+</body>
+
+</html>
+=======
 <html>
 
 <head>
@@ -41,3 +131,4 @@
 </body>
 
 </html>
+>>>>>>> 0ed3b44b4b9e5a9f25278b870c9816a252be37a8
