@@ -219,6 +219,9 @@ def minimize_vol(target_return, er, cov):
 
 
 def optimal_weights(er, cov, n_points=100):
+    """
+    List of weights to run the optimizer on to minimize the volatility.
+    """
     target_rs = np.linspace(er.min(), er.max(), n_points)
     weights = [minimize_vol(target_return, er, cov) for target_return in target_rs]
     return weights

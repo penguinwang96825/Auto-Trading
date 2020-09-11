@@ -27,14 +27,30 @@ def is_downloadable(url):
     return True
 
 
-def crawl_reuters_pages():
-    file = open("./data/reuters_url.txt", 'wb')
+def crawl_reuters_url_to_list(category):
+    """
+    Args:
+        category (:obj: str):
+            "europe-stocks", "businessnews", "worldnews", "domesticnews",
+            "technologynews", "centralbanks", "innovationnews", "aerospace-defence",
+            "autos-upclose", "esgnews", "stocksnews", "gca-foreignexchange",
+            "gc07", "exchange-traded-funds", "specialreports", "euro-zone",
+            "china-news", "japan", "politicsnews", "sciencenews", "medianews",
+            "environmentnews", "mcbreakingviews", "personalfinance"
+        save (:obj: str):
+            Save file path.
+
+    Returns:
+        article_url_list (:obj: list):
+    """
+    save = "./data/{}_reuters_url.txt".format(category)
+    file = open(save, 'wb')
     article_url_list = []
     page = 0
     pbar = tqdm()
     while True:
         page += 1
-        url = "https://uk.reuters.com/news/archive/businessnews?view=page&page={}&pageSize=10".format(page)
+        url = "https://uk.reuters.com/news/archive/{}?view=page&page={}&pageSize=10".format(category, page)
         base_url = "https://uk.reuters.com"
         res = requests.get(url)
         soup = BeautifulSoup(res.text, "html.parser")
@@ -75,7 +91,7 @@ class FeedbackCounter:
         self.counter = 0
         self.list_len = list_len
 
-    def feedback(self, r, bar_length=200, **kwargs):
+    def feedback(self, r, bar_length=100, **kwargs):
         self.counter += 1
         for _ in range(self.list_len):
             percent = self.counter/self.list_len
@@ -106,16 +122,34 @@ class AsynchronousCrawler:
         soup = BeautifulSoup(res.text, "html.parser")
         title = soup.find("h1").text
         date = soup.find("meta", {"name": "REVISION_DATE"}).get("content")
+        cat = soup.find("div", "ArticleHeader-info-container-3-6YG").find("a").text
         content = [sent.text for sent in soup.find_all("p", text=True)]
         content = "".join(content)
-        return [date, title, content]
+        return [date, title, content, res.url, cat]
 
 
-if __name__ == "__main__":
-    reuters_url = open("./data/reuters_url.txt").readlines()
+def crawl_reuters_url_to_csv(category):
+    """
+    Args:
+        category (:obj: str):
+            "europe-stocks", "businessnews", "worldnews", "domesticnews",
+            "technologynews", "centralbanks", "innovationnews", "aerospace-defence",
+            "autos-upclose", "esgnews", "stocksnews", "gca-foreignexchange",
+            "gc07", "exchange-traded-funds", "specialreports", "euro-zone",
+            "china-news", "japan", "politicsnews", "sciencenews", "medianews",
+            "environmentnews", "mcbreakingviews", "personalfinance"
+        save (:obj: str):
+            Save file path.
+    """
+    article_url_list = crawl_reuters_url_to_list(category=category)
+    reuters_url = open("./data/{}_reuters_url.txt".format(category)).readlines()
     url_lists = [x.rstrip().lstrip() for x in reuters_url]
     crawler = AsynchronousCrawler(url_lists)
     res = crawler.asynchronous()
     results = crawler.collate_responses(res)
-    data = pd.DataFrame(results, columns=["Date", "Title", "Article"])
-    data.to_csv("./data/reuters.csv")
+    data = pd.DataFrame(results, columns=["Date", "Title", "Article", "URL", "Category"])
+    data.to_csv("./{}_data/reuters.csv".format(category))
+
+
+if __name__ == "__main__":
+    crawl_reuters_url_to_csv(category="domesticnews")

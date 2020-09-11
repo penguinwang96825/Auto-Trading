@@ -17,6 +17,7 @@ from dateutil.relativedelta import relativedelta
 from sqlalchemy import create_engine
 from transformers import pipeline
 from textblob import TextBlob
+from api_key_config import API_Config
 global API_Config
 warnings.filterwarnings("ignore")
 
@@ -41,7 +42,7 @@ def crawl_forex_data(currency, start_date="2015-09-04", end_date="2020-09-04"):
     """
     Crawl forex data from https://marketdata.tradermade.com
     """
-    api_key = "7Raj9F_tie_yNO4_nGsh"
+    api_key = API_Config.TRADE_MADE_API_KEY
     url = "https://marketdata.tradermade.com/api/v1/timeseries"
     querystring = {
         "currency": currency,
