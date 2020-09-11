@@ -44,6 +44,7 @@ def crawl_reuters_url_to_list(category):
         article_url_list (:obj: list):
     """
     save = "./data/{}_reuters_url.txt".format(category)
+    print("Start crawling urls from every pages in Reuters...")
     file = open(save, 'wb')
     article_url_list = []
     page = 0
