@@ -227,21 +227,58 @@ def optimal_weights(er, cov, n_points=100):
     return weights
 
 
-def plot_multi_efficient_frontier(er, cov, n_points=100):
+def plot_multi_efficient_frontier(er, cov, n_points=100, show_cml=True, risk_free_rate=0.0):
     weights = optimal_weights(er, cov, n_points)
     rets = [portfolio_return(w, er) for w in weights]
     vols = [portfolio_vol(w, cov) for w in weights]
     ef = pd.DataFrame({"Returns": rets, "Volatility": vols})
     plt.figure(figsize=(15, 10))
     plt.scatter(ef.Volatility, ef.Returns)
+    if show_cml:
+        plt.xlim(left=0)
+        w_msr = msr(risk_free_rate, er, cov)
+        r_msr = portfolio_return(w_msr, er)
+        vol_msr = portfolio_vol(w_msr, cov)
+        # Add CML
+        x_cml = [0, vol_msr]
+        y_cml = [risk_free_rate, r_msr]
+        plt.plot(x_cml, y_cml, color="green", marker="o", linestyle="dashed")
     plt.show()
+
+
+def msr(risk_free_rate, er, cov):
+    """
+    Max sharpe ratio
+    """
+    n = er.shape[0]
+    init_guess = np.repeat(1/n, n)
+    bounds = ((0.0, 1.0), )*n
+    weights_sum_to_one = {
+        "type": "eq",
+        "fun": lambda weights: np.sum(weights) - 1
+    }
+
+    def neg_sharpe_ratio(weights, risk_free_rate, er, cov):
+        r = portfolio_return(weights, er)
+        vol = portfolio_vol(weights, cov)
+        return -(r - risk_free_rate)/vol
+
+    results = minimize(
+        fun=neg_sharpe_ratio,
+        x0=init_guess,
+        args=(risk_free_rate, er, cov, ),
+        method="SLSQP",
+        options={"disp": False},
+        constraints=(weights_sum_to_one),
+        bounds=bounds)
+    return results.x
 
 
 def main():
     returns = get_ind_returns(symbol=["GOOG", "AAPL", "MSFT", "AMZN"])
     er = annualise_rets(returns, periods_per_year=252)
-    covmat = returns.cov()
-    plot_multi_efficient_frontier(er, covmat)
+    cov = returns.cov()
+    plot_multi_efficient_frontier(er, cov)
 
 
 if __name__ =="__main__":
