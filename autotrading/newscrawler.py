@@ -7,9 +7,11 @@ import time
 import random
 import pandas as pd
 import numpy as np
+from crawler_config import USER_AGENT_LIST
 from multiprocessing import Pool
 from tqdm import tqdm
 from bs4 import BeautifulSoup
+global USER_AGENT_LIST
 warnings.filterwarnings("ignore")
 
 
@@ -47,13 +49,16 @@ def crawl_reuters_url_to_list(category):
     print("Start crawling urls from every pages in Reuters...")
     file = open(save, 'wb')
     article_url_list = []
+    old_len_of_list = len(article_url_list)
     page = 0
     pbar = tqdm()
     while True:
         page += 1
         url = "https://uk.reuters.com/news/archive/{}?view=page&page={}&pageSize=10".format(category, page)
         base_url = "https://uk.reuters.com"
-        res = requests.get(url)
+        USER_AGENT = random.choice(USER_AGENT_LIST)
+        headers = {'user-agent': USER_AGENT}
+        res = requests.get(url, headers=headers)
         soup = BeautifulSoup(res.text, "html.parser")
         try:
             articles = soup.find_all("article", "story")
@@ -62,6 +67,11 @@ def crawl_reuters_url_to_list(category):
                 article_url = base_url + article_url
                 file.write((article_url+"\n").encode())
                 article_url_list.append(article_url)
+                new_len_of_list = len(article_url_list)
+                if old_len_of_list == new_len_of_list:
+                    break
+                else:
+                    old_len_of_list = new_len_of_list
             pbar.update()
         except:
             print(page)
@@ -113,8 +123,10 @@ class AsynchronousCrawler:
 
     def asynchronous(self):
         return grequests.map(
-            (grequests.get(u, callback=self.fbc.feedback) for u in self.urls),
-            exception_handler=self.exception, size=10)
+            (grequests.get(
+                u, callback=self.fbc.feedback,
+                headers={'user-agent': random.choice(USER_AGENT_LIST)}) for u in self.urls),
+                exception_handler=self.exception, size=50)
 
     def collate_responses(self, results):
         return [self.parse(x) for x in results if x is not None]
@@ -129,7 +141,7 @@ class AsynchronousCrawler:
         return [date, title, content, res.url, cat]
 
 
-def crawl_reuters_url_to_csv(category):
+def crawl_reuters_url_to_csv(category, crawl_url=False):
     """
     Args:
         category (:obj: str):
@@ -142,7 +154,8 @@ def crawl_reuters_url_to_csv(category):
         save (:obj: str):
             Save file path.
     """
-    article_url_list = crawl_reuters_url_to_list(category=category)
+    if crawl_url:
+        article_url_list = crawl_reuters_url_to_list(category=category)
     reuters_url = open("./data/{}_reuters_url.txt".format(category)).readlines()
     url_lists = [x.rstrip().lstrip() for x in reuters_url]
     crawler = AsynchronousCrawler(url_lists)
