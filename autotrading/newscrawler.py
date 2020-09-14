@@ -149,7 +149,7 @@ class AsynchronousCrawler:
         cat = soup.find("div", "ArticleHeader-info-container-3-6YG").find("a").text
         content = [sent.text for sent in soup.find_all("p", text=True)]
         content = "".join(content)
-        with open("./data/{}_reuters.csv".format(self.cat), mode='w') as file:
+        with open("./data/{}_reuters.csv".format(self.cat), mode='w', encoding='utf-8') as file:
             writer = csv.writer(file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
             writer.writerow([date, title, content, res.url, self.cat])
         return [date, title, content, res.url, cat]
