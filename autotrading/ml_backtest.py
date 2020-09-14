@@ -20,6 +20,8 @@ import matplotlib.gridspec as gridspec
 import seaborn as sns
 import plotly.offline as py
 import plotly.tools as tls
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 import xgboost as xgb
 import lightgbm as lgb
 from config import Config
@@ -423,7 +425,7 @@ class MLBacktest:
         self.X_train_df, self.X_train = generate_feature(self.dtrain)
         self.X_test_df, self.X_test = generate_feature(self.dtest)
 
-    def run(self, plot=Config.PLOT_BACKTEST, stats=Config.PLOT_STATS):
+    def run(self, plot=Config.PLOT_BACKTEST, plot_plotly=True, stats=Config.PLOT_STATS):
         """
         Reference from https://gist.github.com/StockBoyzZ/396d48be23fd479a5ca62362b1bc8dc7#file-strategy_test-py
         Reference from https://github.com/kernc/backtesting.py/blob/1512f0e4cd483d7c0c00b6ad6953ca28322b3b7c/backtesting/backtesting.py
@@ -544,7 +546,7 @@ class MLBacktest:
         s.loc['Equity Peak [$]'] = data.strategy_net_equity.max()
         s.loc['Net Return [%]'] = (data.strategy_net_equity[-1] - data.strategy_net_equity[0]) / data.strategy_net_equity[0] * 100
         s.loc['Buy & Hold Return [%]'] = (data.buy_and_hold_equity[-1] - data.buy_and_hold_equity[0]) / data.buy_and_hold_equity[0] * 100
-        s.loc['Annualized Return [%]'] = annualized_return = risk_kit.annualise_rets(data.strategy_net_return, 252)
+        s.loc['Annualized Return [%]'] = annualized_return = risk_kit.annualise_ret(data.strategy_net_return, 252)
         s.loc['Annualized Volatility'] = annualized_volatility = risk_kit.annualise_vol(data.strategy_net_return, 252)
         s.loc['# Trades'] = trade_count = len(sell_dates)
         s.loc['# Trades Per Year'] = trade_count_per_year = trade_count / (data.shape[0]/252)
@@ -643,7 +645,7 @@ def main():
     # Backtest for machine learning
     bt = MLBacktest(data=data, strategy=Config.STRATEGY, cash=Config.CASH, fee=Config.FEE)
     data, stats = bt.run(plot=Config.PLOT_BACKTEST, stats=Config.PLOT_STATS)
-    data.to_csv("./results/backtest.csv")
+    # data.to_csv("./results/backtest.csv")
 
 
 if __name__ == "__main__":

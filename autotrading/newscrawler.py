@@ -1,4 +1,5 @@
 import sys
+import csv
 import data_handler
 import requests
 import grequests
@@ -57,8 +58,17 @@ def crawl_reuters_url_to_list(category):
         url = "https://uk.reuters.com/news/archive/{}?view=page&page={}&pageSize=10".format(category, page)
         base_url = "https://uk.reuters.com"
         USER_AGENT = random.choice(USER_AGENT_LIST)
-        headers = {'user-agent': USER_AGENT}
-        res = requests.get(url, headers=headers)
+        headers = {'user-agent': USER_AGENT, 'Connection': 'close'}
+        try:
+            res = requests.get(url, headers=headers)
+        except:
+            # https://blog.csdn.net/a1007720052/article/details/83383220
+            print("Connection refused by the server...")
+            print("Let me sleep for 5 seconds")
+            print("Zzzzz...")
+            time.sleep(5)
+            print("Was a nice sleep, now let me continue...")
+            continue
         soup = BeautifulSoup(res.text, "html.parser")
         try:
             articles = soup.find_all("article", "story")
@@ -114,8 +124,9 @@ class FeedbackCounter:
 
 
 class AsynchronousCrawler:
-    def __init__(self, lst):
+    def __init__(self, lst, cat):
         self.urls = lst
+        self.cat = cat
         self.fbc = FeedbackCounter(len(lst))
 
     def exception(self, request, exception):
@@ -125,7 +136,7 @@ class AsynchronousCrawler:
         return grequests.map(
             (grequests.get(
                 u, callback=self.fbc.feedback,
-                headers={'user-agent': random.choice(USER_AGENT_LIST)}) for u in self.urls),
+                headers={'user-agent': random.choice(USER_AGENT_LIST), 'Connection': 'close'}) for u in self.urls),
                 exception_handler=self.exception, size=50)
 
     def collate_responses(self, results):
@@ -138,6 +149,9 @@ class AsynchronousCrawler:
         cat = soup.find("div", "ArticleHeader-info-container-3-6YG").find("a").text
         content = [sent.text for sent in soup.find_all("p", text=True)]
         content = "".join(content)
+        with open("./data/{}_reuters.csv".format(self.cat), mode='w') as file:
+            writer = csv.writer(file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
+            writer.writerow([date, title, content, res.url, self.cat])
         return [date, title, content, res.url, cat]
 
 
@@ -158,11 +172,11 @@ def crawl_reuters_url_to_csv(category, crawl_url=False):
         article_url_list = crawl_reuters_url_to_list(category=category)
     reuters_url = open("./data/{}_reuters_url.txt".format(category)).readlines()
     url_lists = [x.rstrip().lstrip() for x in reuters_url]
-    crawler = AsynchronousCrawler(url_lists)
+    crawler = AsynchronousCrawler(url_lists, category)
     res = crawler.asynchronous()
     results = crawler.collate_responses(res)
     data = pd.DataFrame(results, columns=["Date", "Title", "Article", "URL", "Category"])
-    data.to_csv("./{}_data/reuters.csv".format(category))
+    print(data)
 
 
 if __name__ == "__main__":
