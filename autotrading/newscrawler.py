@@ -67,11 +67,11 @@ def crawl_reuters_url_to_list(category):
                 article_url = base_url + article_url
                 file.write((article_url+"\n").encode())
                 article_url_list.append(article_url)
-                new_len_of_list = len(article_url_list)
-                if old_len_of_list == new_len_of_list:
-                    break
-                else:
-                    old_len_of_list = new_len_of_list
+            new_len_of_list = len(article_url_list)
+            if old_len_of_list == new_len_of_list:
+                break
+            else:
+                old_len_of_list = new_len_of_list
             pbar.update()
         except:
             print(page)
@@ -166,4 +166,4 @@ def crawl_reuters_url_to_csv(category, crawl_url=False):
 
 
 if __name__ == "__main__":
-    crawl_reuters_url_to_csv(category="domesticnews")
+    crawl_reuters_url_to_csv(category="centralbanks", crawl_url=True)
