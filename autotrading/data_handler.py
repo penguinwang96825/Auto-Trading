@@ -3,6 +3,7 @@ import json
 import sqlite3
 import joblib
 import requests
+import itertools
 import glob
 import datetime
 import warnings
@@ -13,6 +14,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from tqdm import tqdm
 from collections import deque
+from collections import Counter
 from dateutil.relativedelta import relativedelta
 from sqlalchemy import create_engine
 from transformers import pipeline
@@ -213,13 +215,33 @@ def expand_sentiment_score(text_data):
     return text_data
 
 
+
+
+
 def main():
-    crawl_stock_data("BRK-B")
-    data1 = read_stock_table_from_db("BRK-B")
-    print(data1)
-    crawl_stock_data("BF-B")
-    data2 = read_stock_table_from_db("BF-B")
-    print(data2)
+    docs = [
+        "it is a good day, I like to stay here",
+        "I am happy to be here",
+        "I am bob",
+        "it is sunny today",
+        "I have a party today",
+        "it is a dog and that is a cat",
+        "there are dog and cat on the tree",
+        "I study hard this morning",
+        "today is a good day",
+        "tomorrow will be a good day",
+        "I like coffee, I like book and I like apple",
+        "I do not like it",
+        "I am kitty, I like bob",
+        "I do not care who like bob, but I like kitty",
+        "It is coffee time, bring your cup",
+    ]
+    docs_words = [d.replace(",", "").split(" ") for d in docs]
+    vocab = set(itertools.chain(*docs_words))
+    v2i = {v: i for i, v in enumerate(vocab)}
+    i2v = {i: v for v, i in v2i.items()}
+    print(v2i)
+    print(i2v)
 
 
 if __name__ =="__main__":
