@@ -3,6 +3,7 @@ import json
 import sqlite3
 import joblib
 import requests
+import itertools
 import glob
 import datetime
 import warnings
@@ -13,6 +14,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from tqdm import tqdm
 from collections import deque
+from collections import Counter
 from dateutil.relativedelta import relativedelta
 from sqlalchemy import create_engine
 from transformers import pipeline
@@ -213,13 +215,137 @@ def expand_sentiment_score(text_data):
     return text_data
 
 
+class Tfidf:
+    """
+    Term Frequency - Inverse Document Frequency
+    """
+    def __init__(self, docs):
+        self.docs = docs
+        self.docs_words = [d.replace(",", "").split(" ") for d in docs]
+        self.vocab = set(itertools.chain(*self.docs_words))
+        self.v2i = {v: i for i, v in enumerate(self.vocab)}
+        self.i2v = {i: v for v, i in self.v2i.items()}
+        # [n_vocab, n_doc]
+        self.tf = self.get_tf()
+        # [n_vocab, 1]
+        self.idf = self.get_idf()
+        # [n_vocab, n_doc]
+        self.tf_idf = self.tf * self.idf
+
+    def get_tf(self, method="log"):
+        tf_methods = {
+            "log": lambda x: np.log(1+x),
+            "augmented": lambda x: 0.5 + 0.5 * x / np.max(x, axis=1, keepdims=True),
+            "boolean": lambda x: np.minimum(x, 1),
+            "log_avg": lambda x: (1 + safe_log(x)) / (1 + safe_log(np.mean(x, axis=1, keepdims=True))),
+        }
+        # Term frequency: how frequent a word appears in a doc
+        _tf = np.zeros((len(self.vocab), len(self.docs)), dtype=np.float64)
+        for i, d in enumerate(self.docs_words):
+            counter = Counter(d)
+            for v in counter.keys():
+                _tf[self.v2i[v], i] = counter[v] / counter.most_common(1)[0][1]
+
+        weighted_tf = tf_methods.get(method, None)
+        if weighted_tf is None:
+            raise ValueError
+        return weighted_tf(_tf)
+
+    def get_idf(self, method="log"):
+        idf_methods = {
+            "log": lambda x: 1 + np.log(len(self.docs) / (x+1)),
+            "prob": lambda x: np.maximum(0, np.log((len(self.docs) - x) / (x+1))),
+            "len_norm": lambda x: x / (np.sum(np.square(x))+1),
+        }
+        # Inverse document frequency
+        df = np.zeros((len(self.i2v), 1))
+        for i in range(len(self.i2v)):
+            d_count = 0
+            for d in self.docs_words:
+                d_count += 1 if self.i2v[i] in d else 0
+            df[i, 0] = d_count
+
+        idf_fn = idf_methods.get(method, None)
+        if idf_fn is None:
+            raise ValueError
+        return idf_fn(df)
+
+    def cosine_similarity(self, q, _tf_idf):
+        unit_q = q / np.sqrt(np.sum(np.square(q), axis=0, keepdims=True))
+        unit_ds = _tf_idf / np.sqrt(np.sum(np.square(_tf_idf), axis=0, keepdims=True))
+        similarity = unit_ds.T.dot(unit_q).ravel()
+        return similarity
+
+    def docs_score(self, q, len_norm=False):
+        q_words = q.replace(",", "").split(" ")
+
+        # Add unknown words
+        unknown_v = 0
+        for v in set(q_words):
+            if v not in self.v2i:
+                self.v2i[v] = len(self.v2i)
+                self.i2v[len(self.v2i)-1] = v
+                unknown_v += 1
+        if unknown_v > 0:
+            _idf = np.concatenate((self.idf, np.zeros((unknown_v, 1), dtype=np.float)), axis=0)
+            _tf_idf = np.concatenate((self.tf_idf, np.zeros((unknown_v, self.tf_idf.shape[1]), dtype=np.float)), axis=0)
+        else:
+            _idf, _tf_idf = self.idf, self.tf_idf
+        counter = Counter(q_words)
+        q_tf = np.zeros((len(_idf), 1), dtype=np.float)
+        for v in counter.keys():
+            q_tf[self.v2i[v], 0] = counter[v]
+
+        q_vec = q_tf * _idf
+
+        q_scores = self.cosine_similarity(q_vec, _tf_idf)
+        if len_norm:
+            len_docs = [len(d) for d in self.docs_words]
+            q_scores = q_scores / np.array(len_docs)
+        return q_scores
+
+    def get_keywords(self, n=2, m=10):
+        for c in range(m):
+            col = self.tf_idf[:, c]
+            idx = np.argsort(col)[-n:]
+            print("doc{}, top{} keywords {}".format(c, n, [self.i2v[i] for i in idx]))
+
+    def show_tfidf(self):
+        tfidf = self.tf_idf.T
+        vocab = [self.i2v[i] for i in range(len(self.i2v))]
+        # [n_vocab, n_doc]
+        plt.figure(figsize=(15, 5))
+        plt.imshow(tfidf, cmap="YlGn", vmin=tfidf.min(), vmax=tfidf.max())
+        plt.xticks(np.arange(tfidf.shape[1]), vocab, fontsize=6, rotation=90)
+        plt.yticks(np.arange(tfidf.shape[0]), np.arange(1, tfidf.shape[1]+1), fontsize=6)
+        plt.tight_layout()
+        plt.show()
+
+    def print_instance_attributes(self):
+        for attribute, value in self.__dict__.items():
+            print(attribute, '=', value)
+
+
 def main():
-    crawl_stock_data("BRK-B")
-    data1 = read_stock_table_from_db("BRK-B")
-    print(data1)
-    crawl_stock_data("BF-B")
-    data2 = read_stock_table_from_db("BF-B")
-    print(data2)
+    docs = [
+        "it is a good day, I like to stay here",
+        "I am happy to be here",
+        "I am bob",
+        "it is sunny today",
+        "I have a party today",
+        "it is a dog and that is a cat",
+        "there are dog and cat on the tree",
+        "I study hard this morning",
+        "today is a good day",
+        "tomorrow will be a good day",
+        "I like coffee, I like book and I like apple",
+        "I do not like it",
+        "I am kitty, I like bob",
+        "I do not care who like bob, but I like kitty",
+        "It is coffee time, bring your cup",
+    ]
+    tfidf = Tfidf(docs)
+    tfidf.show_tfidf()
 
 
 if __name__ =="__main__":
