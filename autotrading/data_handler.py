@@ -1,4 +1,5 @@
 import sys
+import time
 import json
 import sqlite3
 import joblib
@@ -436,17 +437,39 @@ class TextCleaner:
         return docx
 
 
-def main():
-    # text = "This is the mail example@gmail.com ,our WEBSITE is https://example.com 😊."
+def clean_df_text(data):
     cleaner = TextCleaner()
-    # text = cleaner.preprocessing(text)
-    # print(text)
-    data = read_twitter_table_from_db()
     text_list = []
     for i, text in tqdm(enumerate(data['Text'].values), total=len(data['Text'].values)):
         cleaned_text = cleaner.preprocessing(text)
         text_list.append(cleaned_text)
-    print(text_list)
+    data["cleaned_text"] = text_list
+    return data
+
+
+def clean_df_text_parallel(data):
+    """
+    Clean text using Parallel from joblib.
+    """
+    def clean(text):
+        cleaner = TextCleaner()
+        cleaned_text = cleaner.preprocessing(text)
+        return cleaned_text
+
+    res = Parallel(n_jobs=8, backend="multiprocessing")(
+        delayed(clean)(text) for text in tqdm(data['Text'].values, total=len(data['Text'].values))
+    )
+    res = np.vstack(res)
+    data["cleaned_text"] = res
+    return data
+
+
+def main():
+    start = time.time()
+    data = read_twitter_table_from_db()
+    data = clean_df_text_parallel(data)
+    print(data[["Text", "cleaned_text"]])
+    print("Elapsed time: {:.4f}s".format(time.time()-start))
 
 
 if __name__ =="__main__":
