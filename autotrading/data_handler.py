@@ -40,6 +40,10 @@ def progressbar(iter, prefix="", size=100, file=sys.stdout):
     file.flush()
 
 
+def remove_unnamed_col(df):
+    return df.drop(df.columns[df.columns.str.contains('unnamed', case=False)], axis=1)
+
+
 def crawl_forex_data(currency, start_date="2015-09-04", end_date="2020-09-04"):
     """
     Crawl forex data from https://marketdata.tradermade.com

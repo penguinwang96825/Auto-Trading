@@ -204,7 +204,7 @@ def minimize_vol(target_return, exp_rets, cov):
     Returns:
         weights (:obj: np.array)
     """
-    n = er.shape[0]
+    n = exp_rets.shape[0]
     init_guess = np.repeat(1/n, n)
     bounds = ((0.0, 1.0), )*n
     return_is_target = {
@@ -232,17 +232,36 @@ def optimal_weights(exp_rets, cov, n_points=100):
     List of weights to run the optimizer on to minimize the volatility.
     """
     target_rs = np.linspace(exp_rets.min(), exp_rets.max(), n_points)
-    weights = [minimize_vol(target_return, er, cov) for target_return in target_rs]
+    weights = [minimize_vol(target_return, exp_rets, cov) for target_return in target_rs]
     return weights
 
 
-def plot_multi_efficient_frontier(exp_rets, cov, n_points=100, show_cml=True, risk_free_rate=0.0):
+def gmv(cov):
+    """
+    Return the weight of Global Minimum Vol Portfolio given the covariance matrix
+    """
+    n = cov.shape[0]
+    return maximize_sharpe_ratio(0, np.repeat(1, n), cov)
+
+
+def plot_multi_efficient_frontier(exp_rets, cov, n_points=100, show_cml=True, risk_free_rate=0.0, show_ew=False, show_gmv=False):
     weights = optimal_weights(exp_rets, cov, n_points)
     rets = [portfolio_return(w, exp_rets) for w in weights]
     vols = [portfolio_vol(w, cov) for w in weights]
     ef = pd.DataFrame({"Returns": rets, "Volatility": vols})
     plt.figure(figsize=(15, 10))
-    plt.scatter(ef.Volatility, ef.Returns)
+    plt.plot(ef.Volatility, ef.Returns, label="Returns")
+    if show_ew:
+        n = exp_rets.shape[0]
+        w_ew = np.repeat(1/n, n)
+        r_ew = portfolio_return(w_ew, exp_rets)
+        vol_ew = portfolio_vol(w_ew, cov)
+        plt.plot(vol_ew, r_ew, color="goldenrod", marker="o", label="Equal Weights Returns")
+    if show_gmv:
+        w_gmv = gmv(cov)
+        r_gmv = portfolio_return(w_gmv, exp_rets)
+        vol_gmv = portfolio_vol(w_gmv, cov)
+        plt.plot(vol_gmv, r_gmv, color="midnightblue", marker="o", label="Global Minimum Vol Portfolio")
     if show_cml:
         plt.xlim(left=0)
         w_msr = maximize_sharpe_ratio(risk_free_rate, exp_rets, cov)
@@ -251,7 +270,8 @@ def plot_multi_efficient_frontier(exp_rets, cov, n_points=100, show_cml=True, ri
         # Add CML
         x_cml = [0, vol_msr]
         y_cml = [risk_free_rate, r_msr]
-        plt.plot(x_cml, y_cml, color="green", marker="o", linestyle="dashed")
+        plt.plot(x_cml, y_cml, color="green", marker="o", linestyle="dashed", label="Capital Market Line")
+    plt.legend()
     plt.show()
 
 
@@ -285,9 +305,9 @@ def maximize_sharpe_ratio(risk_free_rate, exp_rets, cov):
 
 def main():
     returns = get_ind_returns(symbol=["GOOG", "AAPL", "MSFT", "AMZN"])
-    exp_rets = annualise_rets(returns, periods_per_year=252)
+    exp_rets = annualise_ret(returns, periods_per_year=252)
     cov = returns.cov()
-    plot_multi_efficient_frontier(exp_rets, cov)
+    plot_multi_efficient_frontier(exp_rets, cov, show_ew=True, show_gmv=True)
 
 
 if __name__ =="__main__":

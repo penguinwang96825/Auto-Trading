@@ -12,6 +12,7 @@ from crawler_config import USER_AGENT_LIST
 from multiprocessing import Pool
 from tqdm import tqdm
 from bs4 import BeautifulSoup
+from selenium.common.exceptions import TimeoutException
 global USER_AGENT_LIST
 warnings.filterwarnings("ignore")
 
@@ -50,7 +51,6 @@ def crawl_reuters_url_to_list(category):
     print("Start crawling urls from every pages in Reuters...")
     file = open(save, 'wb')
     article_url_list = []
-    old_len_of_list = len(article_url_list)
     page = 0
     pbar = tqdm()
     while True:
@@ -64,29 +64,28 @@ def crawl_reuters_url_to_list(category):
         except:
             # https://blog.csdn.net/a1007720052/article/details/83383220
             print("Connection refused by the server...")
-            print("Let me sleep for 5 seconds")
+            print("Let me sleep for 10 seconds")
             print("Zzzzz...")
-            time.sleep(5)
+            time.sleep(10)
             print("Was a nice sleep, now let me continue...")
             continue
         soup = BeautifulSoup(res.text, "html.parser")
         try:
-            articles = soup.find_all("article", "story")
-            for article in articles:
-                article_url = article.find("div", "story-content").find("a").get("href")
-                article_url = base_url + article_url
-                file.write((article_url+"\n").encode())
-                article_url_list.append(article_url)
-                new_len_of_list = len(article_url_list)
-                if old_len_of_list == new_len_of_list:
-                    break
-                else:
-                    old_len_of_list = new_len_of_list
-            pbar.update()
-        except:
-            print(page)
+            if soup.find("head").find("title").text.rstrip().lstrip() == "An Error has occured | Reuters.com":
+                break
+            elif soup.find("head") == None:
+                break
+            else:
+                articles = soup.find_all("article", "story")
+                for article in articles:
+                    article_url = article.find("div", "story-content").find("a").get("href")
+                    article_url = base_url + article_url
+                    file.write((article_url+"\n").encode())
+                    article_url_list.append(article_url)
+                pbar.update()
+        except TimeoutException:
             break
-    tqdm.close()
+    pbar.close()
     file.close()
     return article_url_list
 
@@ -143,19 +142,19 @@ class AsynchronousCrawler:
         return [self.parse(x) for x in results if x is not None]
 
     def parse(self, res):
-        soup = BeautifulSoup(res.text, "html.parser")
-        title = soup.find("h1").text
-        date = soup.find("meta", {"name": "REVISION_DATE"}).get("content")
-        cat = soup.find("div", "ArticleHeader-info-container-3-6YG").find("a").text
-        content = [sent.text for sent in soup.find_all("p", text=True)]
-        content = "".join(content)
-        with open("./data/{}_reuters.csv".format(self.cat), mode='w', encoding='utf-8') as file:
-            writer = csv.writer(file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
-            writer.writerow([date, title, content, res.url, self.cat])
+        try:
+            soup = BeautifulSoup(res.text, "html.parser")
+            title = soup.find("h1").text
+            date = soup.find("meta", {"name": "REVISION_DATE"}).get("content")
+            cat = soup.find("div", "ArticleHeader-info-container-3-6YG").find("a").text
+            content = [sent.text for sent in soup.find_all("p", text=True)]
+            content = "".join(content)
+        except:
+            date, title, content, cat = None, None, None, None
         return [date, title, content, res.url, cat]
 
 
-def crawl_reuters_url_to_csv(category, crawl_url=False):
+def crawl_reuters_url_to_df(category, reuters_url, n=500):
     """
     Args:
         category (:obj: str):
@@ -165,19 +164,37 @@ def crawl_reuters_url_to_csv(category, crawl_url=False):
             "gc07", "exchange-traded-funds", "specialreports", "euro-zone",
             "china-news", "japan", "politicsnews", "sciencenews", "medianews",
             "environmentnews", "mcbreakingviews", "personalfinance"
-        save (:obj: str):
-            Save file path.
+        reuters_url (:obj: list):
+            List contains urls.
+        n (:obj: int):
+            Slice size of list.
     """
-    if crawl_url:
-        article_url_list = crawl_reuters_url_to_list(category=category)
+
+    category = "domesticnews"
+    data = pd.DataFrame(columns=["Date", "Title", "Article", "URL", "Category"])
     reuters_url = open("./data/{}_reuters_url.txt".format(category)).readlines()
-    url_lists = [x.rstrip().lstrip() for x in reuters_url]
-    crawler = AsynchronousCrawler(url_lists, category)
-    res = crawler.asynchronous()
-    results = crawler.collate_responses(res)
-    data = pd.DataFrame(results, columns=["Date", "Title", "Article", "URL", "Category"])
-    print(data)
+    for i in range(0, len(reuters_url), n):
+        url_lists_temp = [x.rstrip().lstrip() for x in reuters_url[i:i+n]]
+        url_lists_temp = [x.rstrip().lstrip() for x in url_lists_temp]
+        crawler = AsynchronousCrawler(url_lists_temp, category)
+        res = crawler.asynchronous()
+        results = crawler.collate_responses(res)
+        df = pd.DataFrame(results, columns=["Date", "Title", "Article", "URL", "Category"])
+        print()
+        print(df)
+        data = pd.concat([data, df], axis=0)
+        print("Let me sleep for 60 seconds")
+        print("Zzzzz...")
+        data.to_csv("./data/{}_reuters.csv".format(category))
+        time.sleep(60)
+    return data
 
 
 if __name__ == "__main__":
-    crawl_reuters_url_to_csv(category="domesticnews")
+    ls = [
+        "euro-zone", "china-news", "japan", "politicsnews", "sciencenews", "medianews",
+        "environmentnews", "mcbreakingviews", "personalfinance", "aerospace-defence"
+    ]
+    for l in ls:
+        print(l)
+        crawl_reuters_url_to_list(l)
