@@ -137,7 +137,7 @@ class AsynchronousCrawler:
             (grequests.get(
                 u, callback=self.fbc.feedback,
                 headers={'user-agent': random.choice(USER_AGENT_LIST), 'Connection': 'close'}) for u in self.urls),
-                exception_handler=self.exception, size=50)
+                exception_handler=self.exception, size=10)
 
     def collate_responses(self, results):
         return [self.parse(x) for x in results if x is not None]
