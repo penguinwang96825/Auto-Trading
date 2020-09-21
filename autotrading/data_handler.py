@@ -10,9 +10,11 @@ import warnings
 import pandas as pd
 import numpy as np
 import yfinance as yf
+import neattext as nt
 import matplotlib.pyplot as plt
 import seaborn as sns
 from tqdm import tqdm
+from joblib import Parallel, delayed
 from collections import deque
 from collections import Counter
 from dateutil.relativedelta import relativedelta
@@ -219,12 +221,37 @@ def expand_sentiment_score(text_data):
     return text_data
 
 
-<<<<<<< HEAD
-
-=======
 class Tfidf:
     """
     Term Frequency - Inverse Document Frequency
+
+    Examples:
+        docs = [
+            "it is a good day, I like to stay here",
+            "I am happy to be here",
+            "I am bob",
+            "it is sunny today",
+            "I have a party today",
+            "it is a dog and that is a cat",
+            "there are dog and cat on the tree",
+            "I study hard this morning",
+            "today is a good day",
+            "tomorrow will be a good day",
+            "I like coffee, I like book and I like apple",
+            "I do not like it",
+            "I am kitty, I like bob",
+            "I do not care who like bob, but I like kitty",
+            "It is coffee time, bring your cup",
+        ]
+
+        docs_words = [d.replace(",", "").split(" ") for d in docs]
+        vocab = set(itertools.chain(*docs_words))
+        v2i = {v: i for i, v in enumerate(vocab)}
+        i2v = {i: v for v, i in v2i.items()}
+        print(v2i)
+        print(i2v)
+        tfidf = Tfidf(docs)
+        tfidf.show_tfidf()
     """
     def __init__(self, docs):
         self.docs = docs
@@ -331,38 +358,95 @@ class Tfidf:
     def print_instance_attributes(self):
         for attribute, value in self.__dict__.items():
             print(attribute, '=', value)
->>>>>>> bea8f2e7e7efc7a8e6bb225c0c15e9151fed3821
+
+
+def load_contractions_dict():
+    # Dictionary of English Contractions
+    contractions_dict = {
+        "ain't": "are not","'s":" is","aren't": "are not",
+         "can't": "cannot","can't've": "cannot have",
+         "'cause": "because","could've": "could have","couldn't": "could not",
+         "couldn't've": "could not have", "didn't": "did not","doesn't": "does not",
+         "don't": "do not","hadn't": "had not","hadn't've": "had not have",
+         "hasn't": "has not","haven't": "have not","he'd": "he would",
+         "he'd've": "he would have","he'll": "he will", "he'll've": "he will have",
+         "how'd": "how did","how'd'y": "how do you","how'll": "how will",
+         "I'd": "I would", "I'd've": "I would have","I'll": "I will",
+         "I'll've": "I will have","I'm": "I am","I've": "I have", "isn't": "is not",
+         "it'd": "it would","it'd've": "it would have","it'll": "it will",
+         "it'll've": "it will have", "let's": "let us","ma'am": "madam",
+         "mayn't": "may not","might've": "might have","mightn't": "might not",
+         "mightn't've": "might not have","must've": "must have","mustn't": "must not",
+         "mustn't've": "must not have", "needn't": "need not",
+         "needn't've": "need not have","o'clock": "of the clock","oughtn't": "ought not",
+         "oughtn't've": "ought not have","shan't": "shall not","sha'n't": "shall not",
+         "shan't've": "shall not have","she'd": "she would","she'd've": "she would have",
+         "she'll": "she will", "she'll've": "she will have","should've": "should have",
+         "shouldn't": "should not", "shouldn't've": "should not have","so've": "so have",
+         "that'd": "that would","that'd've": "that would have", "there'd": "there would",
+         "there'd've": "there would have", "they'd": "they would",
+         "they'd've": "they would have","they'll": "they will",
+         "they'll've": "they will have", "they're": "they are","they've": "they have",
+         "to've": "to have","wasn't": "was not","we'd": "we would",
+         "we'd've": "we would have","we'll": "we will","we'll've": "we will have",
+         "we're": "we are","we've": "we have", "weren't": "were not","what'll": "what will",
+         "what'll've": "what will have","what're": "what are", "what've": "what have",
+         "when've": "when have","where'd": "where did", "where've": "where have",
+         "who'll": "who will","who'll've": "who will have","who've": "who have",
+         "why've": "why have","will've": "will have","won't": "will not",
+         "won't've": "will not have", "would've": "would have","wouldn't": "would not",
+         "wouldn't've": "would not have","y'all": "you all", "y'all'd": "you all would",
+         "y'all'd've": "you all would have","y'all're": "you all are",
+         "y'all've": "you all have", "you'd": "you would","you'd've": "you would have",
+         "you'll": "you will","you'll've": "you will have", "you're": "you are",
+         "you've": "you have"
+    }
+    return contractions_dict
+
+
+class TextCleaner:
+    """
+    Clean text using neattext.
+    """
+    def __init__(self):
+        pass
+
+    def build_features(self, text):
+        s = pd.Series(dtype=object)
+        docx = nt.TextFrame(text=text)
+        # Scan Percentage of Noise(Unclean data) in text
+        s.loc["text_noise"] = docx.noise_scan()["text_noise"]
+        s.loc["text_length"] = docx.noise_scan()["text_length"]
+        s.loc["noise_count"] = docx.noise_scan()["noise_count"]
+        s.loc["vowels_count"] = docx.count_vowels()
+        s.loc["consonants_count"] = docx.count_consonants()
+        s.loc["stopwords_count"] = docx.count_stopwords()
+        return s
+
+    def preprocessing(self, text):
+        docx = nt.TextFrame(text=text)
+        docx = docx.remove_puncts()
+        docx = docx.remove_numbers()
+        docx = docx.remove_phone_numbers()
+        docx = docx.remove_stopwords()
+        docx = docx.remove_urls()
+        docx = docx.remove_special_characters()
+        docx = docx.remove_emojis()
+        docx = docx.fix_contractions()
+        return docx
 
 
 def main():
-    docs = [
-        "it is a good day, I like to stay here",
-        "I am happy to be here",
-        "I am bob",
-        "it is sunny today",
-        "I have a party today",
-        "it is a dog and that is a cat",
-        "there are dog and cat on the tree",
-        "I study hard this morning",
-        "today is a good day",
-        "tomorrow will be a good day",
-        "I like coffee, I like book and I like apple",
-        "I do not like it",
-        "I am kitty, I like bob",
-        "I do not care who like bob, but I like kitty",
-        "It is coffee time, bring your cup",
-    ]
-<<<<<<< HEAD
-    docs_words = [d.replace(",", "").split(" ") for d in docs]
-    vocab = set(itertools.chain(*docs_words))
-    v2i = {v: i for i, v in enumerate(vocab)}
-    i2v = {i: v for v, i in v2i.items()}
-    print(v2i)
-    print(i2v)
-=======
-    tfidf = Tfidf(docs)
-    tfidf.show_tfidf()
->>>>>>> bea8f2e7e7efc7a8e6bb225c0c15e9151fed3821
+    # text = "This is the mail example@gmail.com ,our WEBSITE is https://example.com 😊."
+    cleaner = TextCleaner()
+    # text = cleaner.preprocessing(text)
+    # print(text)
+    data = read_twitter_table_from_db()
+    text_list = []
+    for i, text in tqdm(enumerate(data['Text'].values), total=len(data['Text'].values)):
+        cleaned_text = cleaner.preprocessing(text)
+        text_list.append(cleaned_text)
+    print(text_list)
 
 
 if __name__ =="__main__":
