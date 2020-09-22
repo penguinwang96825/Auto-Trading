@@ -451,13 +451,8 @@ def clean_df_text_parallel(data):
     """
     Clean text using Parallel from joblib.
     """
-    def clean(text):
-        cleaner = TextCleaner()
-        cleaned_text = cleaner.preprocessing(text)
-        return cleaned_text
-
     res = Parallel(n_jobs=8, backend="multiprocessing")(
-        delayed(clean)(text) for text in tqdm(data['Text'].values, total=len(data['Text'].values))
+        delayed(TextCleaner().preprocessing)(text) for text in tqdm(data['Text'].values, total=len(data['Text'].values))
     )
     res = np.vstack(res)
     data["cleaned_text"] = res
@@ -465,12 +460,20 @@ def clean_df_text_parallel(data):
 
 
 def main():
-    start = time.time()
-    data = read_twitter_table_from_db()
-    data = clean_df_text_parallel(data)
-    print(data[["Text", "cleaned_text"]])
-    print("Elapsed time: {:.4f}s".format(time.time()-start))
+    twitter = read_twitter_table_from_db()
 
+    start1 = time.time()
+    data = clean_df_text(twitter)
+    print(data[["Text", "cleaned_text"]])
+    end1 = time.time()
+
+    start2 = time.time()
+    data = clean_df_text_parallel(twitter)
+    print(data[["Text", "cleaned_text"]])
+    end2 = time.time()
+
+    print("Elapsed time: {:.4f}s (Non-parallel)".format(end1-start1))
+    print("Elapsed time: {:.4f}s (Parallel)".format(end2-start2))
 
 if __name__ =="__main__":
     main()
